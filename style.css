@@ -280,6 +280,8 @@
     --djst-doodlejump-platform-moving: #7fae5a;
     --djst-doodlejump-platform-crumbling: #b58a4a;
     --djst-doodlejump-spring: #e0c34d;
+    --djst-doodlejump-propeller: #7bc6c6;
+    --djst-doodlejump-rocket: #d1603d;
 }
 
 /* Тёмная палитра. Не «тема ST потемнее», а свой набор: фон окна чуть светлее чёрного,
@@ -311,6 +313,8 @@
     --djst-doodlejump-platform-moving: #7fae5a;
     --djst-doodlejump-platform-crumbling: #b58a4a;
     --djst-doodlejump-spring: #e0c34d;
+    --djst-doodlejump-propeller: #7bc6c6;
+    --djst-doodlejump-rocket: #d1603d;
 }
 
 /* Светлая палитра. Поле белое, а подложка окна — тёплый серый: белое поле на белом окне
@@ -341,6 +345,8 @@
     --djst-doodlejump-platform-moving: #4f7c34;
     --djst-doodlejump-platform-crumbling: #8a6528;
     --djst-doodlejump-spring: #b08f14;
+    --djst-doodlejump-propeller: #2f7d7d;
+    --djst-doodlejump-rocket: #a83c1c;
 }
 
 /* Своя палитра — своя подложка: без неё шапка окна и подписи остались бы цветом темы ST
