@@ -170,11 +170,15 @@ function stubRect(canvas, width = 320) {
     return canvas;
 }
 
-function pointer(canvas, type, clientX, id = 1) {
+function pointerOn(target, type, clientX, id = 1) {
     const event = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, clientX });
     Object.defineProperty(event, 'pointerId', { value: id });
-    canvas.dispatchEvent(event);
+    target.dispatchEvent(event);
     return event;
+}
+
+function pointer(canvas, type, clientX, id = 1) {
+    return pointerOn(canvas, type, clientX, id);
 }
 
 // Фигурку в записанных заливках узнаём по ширине: она PLAYER_W мировых единиц, а
@@ -425,6 +429,70 @@ await session({ gameId: 'doodlejump' }, async (root) => {
 
 // --- Падение: оверлей и запись статистики ровно один раз.
 
+// Ввод: отпускание пальца мимо канваса и «гасим только обработанное»
+// (docs/plan-doodlejump-fixes.md §J). Своя сессия, а не продолжение предыдущей: обе
+// проверки меряют движение живой фигурки, а к концу той сессии заезд уже потрёпан —
+// заезд мог кончиться падением прямо посреди замера.
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    // --- Палец, отпущенный за краем поля (docs/plan-doodlejump-fixes.md §J.1).
+    //
+    // setPointerCapture — «удобство, а не необходимость»: там, где его нет, отпускание за
+    // краем поля не приходило канвасу вовсе, и намерение пальца оставалось висеть. А оно
+    // старше клавиатуры и кнопок — управление становилось мёртвым до нового тапа по полю.
+
+    test('палец, отпущенный мимо канваса, отпускает управление', () => {
+        ensureAlive(root);
+        const canvas = stubRect(root.querySelector('.doodlejump-canvas'));
+        pointer(canvas, 'pointerdown', 310);
+        frames(10);
+        // Отпускание приходит в документ, а не на канвас — ровно так это выглядит, когда
+        // палец уехал за край поля, а захват указателя не сработал.
+        pointerOn(document, 'pointerup', 310);
+        frames(14);
+        const settled = lastPlayerX();
+        frames(8);
+        assert(Math.abs(lastPlayerX() - settled) < 0.5, `фигурка встала: ${settled} → ${lastPlayerX()}`);
+
+        // И клавиатура снова доходит до ядра: намерение пальца её больше не перебивает.
+        key('keydown', 'ArrowLeft');
+        frames(14);
+        const before = lastPlayerX();
+        frames(8);
+        assert(lastPlayerX() < before, `клавиатура жива: ${before} → ${lastPlayerX()}`);
+        key('keyup', 'ArrowLeft');
+        frames(12);
+    });
+
+    // --- Гасим только обработанное (docs/plan-doodlejump-fixes.md §J.2, правило 4
+    // docs/games.md). Enter во время живой партии игра не обрабатывает, пробел при
+    // открытой витрине — тоже: им прокручивают список скинов.
+
+    test('Enter во время живой партии не гасится', () => {
+        ensureAlive(root);
+        const enter = key('keydown', 'Enter');
+        assert(!enter.defaultPrevented, 'партия жива — Enter уходит дальше');
+    });
+
+    test('пробел ставит паузу и потому гасится', () => {
+        const space = key('keydown', ' ');
+        assert(space.defaultPrevented, 'пауза сработала — пробел наш');
+        assertEqual(root.querySelector('.doodlejump-status').textContent, 'Пауза', 'и она видна');
+        key('keydown', ' ');
+        frames(2);
+    });
+
+    test('при открытой витрине Enter и пробел уходят дальше', () => {
+        root.querySelector('.doodlejump-shop-open').click();
+        const space = key('keydown', ' ');
+        assert(!space.defaultPrevented, 'пробелом прокручивают список скинов');
+        const enter = key('keydown', 'Enter');
+        assert(!enter.defaultPrevented, 'Enter за спиной у витрины партию не начинает');
+        root.querySelector('.doodlejump-shop-close').click();
+        frames(2);
+    });
+});
+
 const playedBefore = getSettings().games.doodlejump.stats.played;
 
 await session({ gameId: 'doodlejump' }, async (root) => {
@@ -557,6 +625,41 @@ test('брошенный заезд засчитывает монеты при �
     assertEqual(walletCoins(), walletBeforeQuit + earnedInQuit, 'кошелёк вырос на собранное');
 });
 
+// Брошенный заезд записывает не только монеты, но и результат: иначе он числится
+// сыгранным («сыграно» растёт на старте), а высоты в статистике нет — потеря данных
+// (docs/plan-doodlejump-fixes.md §M).
+
+getSettings().games.doodlejump.stats = { played: 0, bestScore: 0, bestPlatforms: 0 };
+useDefaultRng();
+let heightInQuit = 0;
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    // Набираем высоту: без ввода фигурка скачет на стартовой платформе, поэтому едем
+    // вбок — но останавливаемся ДО падения, иначе результат запишет обычный record().
+    const height = () => Number(root.querySelector('.doodlejump-header span').textContent.replace(/\D+/g, ''));
+    const overlay = root.querySelector('.doodlejump-over');
+    key('keydown', 'ArrowRight');
+    let guard = 0;
+    while (height() === 0 && overlay.style.display !== 'flex' && guard < 400) {
+        frame();
+        guard += 1;
+    }
+    key('keyup', 'ArrowRight');
+    heightInQuit = height();
+
+    test('до закрытия окна результат брошенного заезда ещё не записан', () => {
+        assert(heightInQuit > 0, `высота набрана: ${heightInQuit}`);
+        assertEqual(getSettings().games.doodlejump.stats.bestScore, 0, 'рекорд пока нулевой');
+        assertEqual(getSettings().games.doodlejump.stats.played, 1, 'а заезд уже числится сыгранным');
+    });
+});
+
+test('брошенный заезд записывает высоту при закрытии окна', () => {
+    const stats = getSettings().games.doodlejump.stats;
+    assertEqual(stats.bestScore, heightInQuit, 'рекорд — высота брошенного заезда');
+    assertEqual(stats.played, 1, 'сыгранным заезд остался ровно одним');
+});
+
 // Кошелёк из руками поправленного settings.json может оказаться чем угодно: экран обязан
 // это пережить и починить запись, а не упасть.
 getSettings().games.doodlejump.wallet = 'нет у меня кошелька';
@@ -574,7 +677,86 @@ test('битый кошелёк чинится при записи монет, �
     assertEqual(walletCoins(), earnedBroken, 'кошелёк создан заново и содержит собранное');
 });
 
+// Витрина, открытая посреди заезда, показывает и собранное за него: раньше в шапке было
+// «Монеты: 2», а в витрине «Монет: 0», и купить на них было нельзя
+// (docs/plan-doodlejump-fixes.md §L.1). Заодно проверяем главную опасность этой правки:
+// монеты, собранные ПОСЛЕ похода в магазин, не должны потеряться.
+
+getSettings().games.doodlejump.wallet = { coins: 7 };
+getSettings().games.doodlejump.skins = { owned: ['default'], current: 'default' };
+useCoinRng();
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    let earnedBeforeShop = 0;
+
+    test('витрина посреди заезда показывает кошелёк вместе с монетами заезда', () => {
+        earnedBeforeShop = collectCoins(root);
+        assert(earnedBeforeShop > 0, `монеты собраны: ${earnedBeforeShop}`);
+
+        root.querySelector('.doodlejump-shop-open').click();
+        assertEqual(
+            shopBalance(root),
+            7 + earnedBeforeShop,
+            'баланс витрины — кошелёк плюс собранное за заезд',
+        );
+        assertEqual(headerCoins(root), earnedBeforeShop, 'счётчик заезда остался счётчиком заезда');
+        root.querySelector('.doodlejump-shop-close').click();
+    });
+
+    test('монеты, собранные после похода в магазин, не теряются', () => {
+        // collectCoins ждёт первую монету, а здесь их уже собрано — ждём следующую.
+        let guard = 0;
+        while (headerCoins(root) === earnedBeforeShop && guard < 800) {
+            frame();
+            guard += 1;
+        }
+        const afterShop = headerCoins(root);
+        assert(afterShop > earnedBeforeShop, `за заезд собрано больше: ${earnedBeforeShop} → ${afterShop}`);
+        root.querySelector('.doodlejump-shop-open').click();
+        assertEqual(shopBalance(root), 7 + afterShop, 'в кошельке всё собранное, без потерь и без двойного счёта');
+        root.querySelector('.doodlejump-shop-close').click();
+    });
+});
+
+// Битые записи чинятся при ОТКРЫТИИ витрины и сразу сохраняются: раньше починка была
+// побочным действием покупки, а сохранял UI только успешную ветку — до перезагрузки
+// таверны, и так по кругу (docs/plan-doodlejump-fixes.md §L.5).
+
+getSettings().games.doodlejump.wallet = { coins: -5 };
+getSettings().games.doodlejump.skins = 'нет';
 useDefaultRng();
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    test('открытие витрины чинит настройки и сохраняет починку', () => {
+        const savesBefore = saves;
+        root.querySelector('.doodlejump-shop-open').click();
+
+        const game = getSettings().games.doodlejump;
+        assertEqual(game.wallet.coins, 0, 'отрицательный баланс обнулён');
+        assert(Array.isArray(game.skins.owned), 'список скинов стал списком');
+        assertEqual(game.skins.current, 'default', 'надет бесплатный скин');
+        assert(saves > savesBefore, 'починка сохранена, а не дожила до перезагрузки');
+    });
+
+    test('покупка без монет: отказ виден игроку, настройки не портятся', () => {
+        const ufo = shopItem(root, 'ufo');
+        ufo.querySelector('.doodlejump-shop-action').click();
+        assertEqual(shopBalance(root), 0, 'баланс не изменился');
+        assertEqual(getSettings().games.doodlejump.skins.current, 'default', 'скин не надет');
+    });
+
+    test('клик по плитке работает так же, как по её кнопке', () => {
+        getSettings().games.doodlejump.wallet.coins = 500;
+        root.querySelector('.doodlejump-shop-close').click();
+        root.querySelector('.doodlejump-shop-open').click();
+        // Клик мимо кнопки — по превью: раньше он не делал ничего.
+        shopItem(root, 'ufo').querySelector('.doodlejump-shop-preview')
+            .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assertEqual(getSettings().games.doodlejump.skins.current, 'ufo', 'скин куплен и надет');
+        assertEqual(shopBalance(root), 475, 'цена списана ровно один раз');
+        root.querySelector('.doodlejump-shop-close').click();
+    });
+});
 
 // --- Реестр скинов (§G.4 плана): контракт и отрисовка каждой формы.
 //
@@ -731,15 +913,24 @@ await session({ gameId: 'doodlejump' }, async (root) => {
         assert(previews.length > 0, 'у превью просили контекст');
         assert(previews.every((r) => r.attached), 'и каждый раз канвас уже висел в дереве экрана');
 
-        // Поле на время витрины убирается: она полупрозрачная, и платформы рябили сквозь
-        // плитки — игрок это и заметил на живом устройстве.
+        // Поле на время витрины убирается совсем.
         assert(
             root.querySelector('.doodlejump-stage').classList.contains('is-shopping'),
             'поле спрятано, пока открыта витрина',
         );
 
+        // И кадры в скрытый канвас не рисуются: у него нет клиентских размеров, view.js
+        // ушёл бы на фолбэк 320×512 и перевыделял буфер каждый кадр (замер в живой ST:
+        // 324×520 → 320×512 → 324×520).
+        const passBefore = mock2d.pass;
         frames(10);
+        assertEqual(mock2d.pass, passBefore, 'под витриной кадры не рисуются вовсе');
+
+        // Партия при этом стоит: закрываем витрину и сверяем, что фигурка там же, где
+        // была до открытия.
+        root.querySelector('.doodlejump-shop-close').click();
         assertClose2(lastPlayerX(), before, 0.001, 'пока магазин открыт, фигурка стоит');
+        root.querySelector('.doodlejump-shop-open').click();
     });
 
     test('надетый скин помечен, купить его нельзя', () => {
@@ -1101,6 +1292,132 @@ await test('view рисует бустеры разными силуэтами, 
     assertClose2(gauge[1].w, gauge[0].w / 2, 0.6, 'заполнение — половина: полёт пройден наполовину');
 
     view.destroy();
+});
+
+// --- Fail soft: ошибка внутри кадра не убивает цикл.
+//
+// Раньше onFrame() планировал следующий кадр последней строкой, и любое исключение внутри
+// кадра уносило планирование с собой: экран замирал в последнем нарисованном состоянии,
+// строка статуса оставалась пустой, тапы ничего не делали. Со стороны это неотличимо от
+// зависшей вкладки — именно так этот баг и искали.
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    const status = root.querySelector('.doodlejump-status');
+    const overlay = root.querySelector('.doodlejump-over');
+    // Ломаем отрисовку: clearRect — первое, что делает view.draw().
+    const goodClear = mock2d.clearRect;
+    let breakFrames = 0;
+    mock2d.clearRect = function brokenClear() {
+        if (breakFrames > 0) {
+            breakFrames -= 1;
+            throw new Error('тестовый сбой отрисовки');
+        }
+        return goodClear.call(this);
+    };
+    // Ошибки кадра обязаны попадать в консоль с префиксом [STGames], а не молчать.
+    const errors = [];
+    const realError = console.error;
+    console.error = (...args) => { errors.push(args.map(String).join(' ')); };
+
+    test('одиночный сбойный кадр логируется, а цикл продолжается', () => {
+        frame();
+        const queued = rafCallbacks.length;
+        breakFrames = 1;
+        frame();
+        assertEqual(errors.length, 1, 'ошибка залогирована ровно один раз');
+        assert(errors[0].startsWith('[DoodleJumpST]'), `префикс лога: ${errors[0]}`);
+        assertEqual(rafCallbacks.length, queued + 1, 'следующий кадр запланирован');
+        const pass = mock2d.pass;
+        frame();
+        assert(mock2d.pass > pass, 'и этот кадр нарисовался — цикл жив');
+        assertEqual(status.textContent, '', 'одна осечка ничего игроку не сообщает');
+    });
+
+    test('серия сбоев останавливает игру видимо, а не немым замиранием', () => {
+        errors.length = 0;
+        breakFrames = 20; // с запасом: важно, что цикл сдаётся сам на пятом
+        frames(6);
+        assertEqual(errors.length, 5, 'логов ровно по лимиту серии — потока в консоль нет');
+        assertEqual(overlay.style.display, 'flex', 'игроку показан экран остановки');
+        assert(overlay.textContent.includes('Что-то сломалось'), 'и сказано, что случилось');
+        assert(status.textContent.includes('ошибки'), `статус про ошибку: ${status.textContent}`);
+        const queued = rafCallbacks.length;
+        frames(3);
+        assertEqual(rafCallbacks.length, queued, 'новые кадры не планируются');
+    });
+
+    test('Enter после остановки поднимает цикл обратно', () => {
+        breakFrames = 0;
+        errors.length = 0;
+        key('keydown', 'Enter');
+        assertEqual(overlay.style.display, 'none', 'экран остановки убран');
+        const pass = mock2d.pass;
+        frames(3);
+        assert(mock2d.pass > pass, 'кадры снова идут');
+        assertEqual(status.textContent, '', 'статус чист — партия идёт');
+        assertEqual(errors.length, 0, 'и без новых ошибок');
+    });
+
+    // Крах при открытой витрине показывал оверлей ПОД ней и запирал экран: Enter не
+    // работал, а «Закрыть» оверлей уже не возвращало (docs/plan-doodlejump-fixes.md §O.4).
+    test('крах при открытой витрине не запирает экран', () => {
+        errors.length = 0;
+        root.querySelector('.doodlejump-shop-open').click();
+
+        // Ломаем шапку, а не отрисовку: под витриной кадры не рисуются вовсе, и сломать
+        // игру через canvas в этот момент нельзя.
+        const scoreEl = root.querySelector('.doodlejump-header span');
+        Object.defineProperty(scoreEl, 'textContent', {
+            configurable: true,
+            get: () => '',
+            set() { throw new Error('тестовый сбой шапки'); },
+        });
+        frames(6);
+        delete scoreEl.textContent;
+
+        assertEqual(errors.length, 5, 'серия оборвалась по лимиту');
+        assertEqual(overlay.style.display, 'none', 'оверлей не показан под витриной');
+
+        root.querySelector('.doodlejump-shop-close').click();
+        assertEqual(overlay.style.display, 'flex', 'после закрытия витрины оверлей краха на месте');
+        assert(overlay.textContent.includes('Что-то сломалось'), 'и это именно он');
+
+        key('keydown', 'Enter');
+        assertEqual(overlay.style.display, 'none', 'Enter поднял игру');
+        const pass = mock2d.pass;
+        frames(3);
+        assert(mock2d.pass > pass, 'кадры снова идут');
+    });
+
+    console.error = realError;
+    mock2d.clearRect = goodClear;
+});
+
+// Пауза видна на самом поле, а не только строкой под кнопками (§O.1).
+
+await session({ gameId: 'doodlejump' }, async (root) => {
+    const plate = root.querySelector('.doodlejump-pause');
+
+    test('пауза показывает плашку поверх поля', () => {
+        assert(plate, 'плашка в разметке');
+        frame();
+        assertEqual(plate.style.display, 'none', 'в идущей партии её нет');
+
+        key('keydown', ' ');
+        frame();
+        assertEqual(plate.style.display, 'flex', 'на паузе она видна');
+        assertEqual(plate.textContent, 'Пауза', 'и говорит, что случилось');
+
+        key('keydown', ' ');
+        frame();
+        assertEqual(plate.style.display, 'none', 'снятая пауза убирает плашку');
+    });
+
+    test('витрина плашку паузы не показывает — там своя картинка', () => {
+        root.querySelector('.doodlejump-shop-open').click();
+        assertEqual(plate.style.display, 'none', 'под витриной плашки нет');
+        root.querySelector('.doodlejump-shop-close').click();
+    });
 });
 
 // --- createDrag напрямую: арифметика намерения и снятие слушателей.

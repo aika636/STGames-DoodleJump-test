@@ -12,7 +12,7 @@ import {
     setDifficulty, setInput, setMovingPlatforms,
 } from './core/engine.js';
 import { readStats, recordPlayed, recordResult, resetStats } from './core/stats.js';
-import { addCoins, buySkin, readSkins, readWallet, wearSkin } from './core/wallet.js';
+import { addCoins, buySkin, readSkins, readWallet, repairWallet, wearSkin } from './core/wallet.js';
 import { logError } from '../../log.js';
 import { checkbox, row, select } from '../../shell/settings-ui.js';
 import { createView } from './ui/view.js';
@@ -30,6 +30,13 @@ const DEFAULTS = Object.freeze({
     boosters: true,
     showButtons: true,
 });
+
+// Сколько кадров подряд имеет право упасть, прежде чем экран сдаётся. Один сбойный кадр —
+// это ещё не поломка: он может прийтись на промежуточное состояние (пересчёт размеров при
+// повороте телефона, пропавший 2d-контекст на переключении вкладок). Пять подряд — уже
+// система, и продолжать значит крутить rAF вхолостую, заваливая консоль.
+const FRAME_ERROR_LIMIT = 5;
+const CRASH_STATUS = 'Игра остановлена из-за ошибки. Нажмите Enter, чтобы начать заново.';
 
 // Подписи к ключам DIFFICULTY из движка: список уровней берётся оттуда, чтобы новый
 // уровень не пришлось дублировать в двух местах.
@@ -191,6 +198,15 @@ function createDoodleJumpScreen(root, api) {
     // (docs/plan-doodlejump-fixes.md §G.3). Открытый с экрана проигрыша, он этот экран
     // прячет (openShop) и возвращает при закрытии — накрыть его собой нельзя, витрина
     // на светопрозрачной палитре темы просвечивает.
+    // Пауза — плашка поверх поля, а не только строчка под кнопками: на снятых кадрах
+    // экран паузы отличался от идущей партии одной мелкой подписью внизу, и игрок этой
+    // разницы не видел.
+    const pausePlate = document.createElement('div');
+    pausePlate.className = 'doodlejump-pause';
+    pausePlate.textContent = 'Пауза';
+    pausePlate.style.display = 'none';
+    stage.appendChild(pausePlate);
+
     const shop = document.createElement('div');
     shop.className = 'doodlejump-shop';
     shop.style.display = 'none';
@@ -246,8 +262,12 @@ function createDoodleJumpScreen(root, api) {
     let lastFrame = null;
     let rafId = null;
     let overRecorded = false;
-    let cashedOut = false;
+    // Сколько монет текущего заезда уже уехало в кошелёк. См. cashOut().
+    let cashedCoins = 0;
     let destroyed = false;
+    // Подряд идущие сбойные кадры и «заезд остановлен ошибкой». См. onFrame().
+    let frameErrors = 0;
+    let crashed = false;
 
     const paused = () => manualPaused || autoPaused;
 
@@ -275,7 +295,12 @@ function createDoodleJumpScreen(root, api) {
     }
 
     function updateStatus() {
-        if (shopOpen()) {
+        // Плашка живёт по тем же условиям, что и строка статуса, поэтому и обновляется
+        // здесь: не в витрине (там своя картинка), не после падения (там оверлей).
+        pausePlate.style.display = paused() && state.alive && !crashed && !shopOpen() ? 'flex' : 'none';
+        if (crashed) {
+            status.textContent = CRASH_STATUS;
+        } else if (shopOpen()) {
             status.textContent = 'Магазин — партия на паузе';
         } else if (!state.alive) {
             status.textContent = 'Падение. Нажмите Enter для новой игры.';
@@ -287,6 +312,10 @@ function createDoodleJumpScreen(root, api) {
     }
 
     function showOver() {
+        // Палец, стоявший на поле в момент падения, отпускать некуда: события отпускания
+        // на оверлее не будет. Оставленное намерение старше клавиатуры и кнопок, и новый
+        // заезд начался бы с ходом в сторону точки старого падения.
+        drag.release();
         overlay.style.display = 'flex';
         const content = overlay.querySelector('.doodlejump-over-content');
         const best = readStats(settings.stats);
@@ -379,32 +408,48 @@ function createDoodleJumpScreen(root, api) {
 
             const btn = document.createElement('button');
             btn.className = 'doodlejump-shop-action menu_button';
+            // Отрисовки поля тут нет ни в одной ветке: канвас под витриной скрыт, у него
+            // clientWidth === 0, и draw() уходил на фолбэк 320×512, перевыделяя буфер
+            // (замер: 324×520 → 320×512 → 324×520). Новый скин показывает closeShop().
+            let action = null;
             if (isWorn) {
                 btn.textContent = 'Надет';
                 btn.disabled = true;
             } else if (isOwned) {
                 btn.textContent = 'Надеть';
-                btn.addEventListener('click', () => {
+                action = () => {
                     wearSkin(settings, skin.id);
                     api.save();
                     renderShop();
-                    view.draw(state);
-                });
+                };
             } else {
                 btn.textContent = `Купить за ${skin.price}`;
-                btn.addEventListener('click', () => {
+                action = () => {
                     // Цену магазин передаёт сам: реестр скинов живёт в ui/, и ядро о нём
                     // знать не должно (docs/plan-doodlejump-fixes.md §G.3).
                     const res = buySkin(settings, skin.id, skin.price);
                     if (!res.ok) {
+                        // Отклик на КАЖДУЮ причину: молча ничего не делающая кнопка
+                        // читается как поломка игры, а не как отказ.
                         if (res.reason === 'poor') api.toast('info', 'Не хватает монет');
+                        else if (res.reason === 'owned') api.toast('info', 'Скин уже куплен');
+                        else api.toast('info', 'Такого скина нет');
                         renderShop();
                         return;
                     }
                     api.save();
                     api.renderAllStats?.();
                     renderShop();
-                    view.draw(state);
+                };
+            }
+            if (action) {
+                btn.addEventListener('click', action);
+                // Вся плитка — тоже цель: кнопка узкая (72 px превью против 22 px кнопки),
+                // и промах мимо неё пальцем не делал ничего. Клик по самой кнопке сюда
+                // всплывает — его пропускаем, иначе действие сработало бы дважды.
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    action();
                 });
             }
 
@@ -436,6 +481,19 @@ function createDoodleJumpScreen(root, api) {
         if (shopOpen()) return;
         pausedBeforeShop = manualPaused;
         manualPaused = true;
+        // Монеты заезда — в кошелёк прямо сейчас. Иначе витрина показывала бы баланс без
+        // собранного («Монеты: 2» в шапке против «Монет: 0» в витрине) и не давала бы на
+        // него купить. Обратной дороги у монет нет и так: заезд их не возвращает.
+        cashOut();
+        // И заодно чиним записи настроек, если их правили руками. Отдельным вызовом, а не
+        // побочным действием покупки: сохранить починку надо в любом случае, а покупка
+        // может и не состояться (docs/plan-doodlejump-fixes.md §L.5).
+        try {
+            repairWallet(settings);
+            api.save();
+        } catch (err) {
+            logError('не удалось починить кошелёк дудл джампа', err);
+        }
         // Экран проигрыша на время витрины убирается совсем, а не прикрывается ею: фон
         // витрины собран из --djst-surface и --djst-bg, а в режиме «Цвета таверны» обе эти
         // переменные сами полупрозрачные (см. блок палитры в style.css), и смесь двух
@@ -489,11 +547,15 @@ function createDoodleJumpScreen(root, api) {
     // решение к тому же поощряло бы досиживать до падения ради валюты. Поэтому cashOut()
     // зовётся и из record(), и из destroy(), а флаг не даёт заплатить дважды.
     function cashOut() {
-        if (cashedOut) return;
-        cashedOut = true;
-        if (!state.coins) return;
+        // Считаем не «было ли уже», а СКОЛЬКО уже уехало: витрина открывается и посреди
+        // заезда (там она зовёт cashOut(), чтобы показать честный баланс и дать на него
+        // купить), после чего заезд продолжается и монеты копятся дальше. Флаг «уже
+        // выплачено» терял бы всё, собранное после похода в магазин.
+        const pending = state.coins - cashedCoins;
+        if (pending <= 0) return;
+        cashedCoins = state.coins;
         try {
-            addCoins(settings, state.coins);
+            addCoins(settings, pending);
             api.save();
             api.renderAllStats?.();
         } catch (err) {
@@ -516,13 +578,25 @@ function createDoodleJumpScreen(root, api) {
     }
 
     function restart() {
+        // Цикл после crash() стоит — заводим его первым делом и ровно один раз. Первым,
+        // потому что дальше по рестарту есть отрисовка, а она — один из подозреваемых:
+        // упади она снова, кадровый цикл уже крутится и снова покажет это словами, вместо
+        // того чтобы оставить экран немым.
+        if (crashed) {
+            crashed = false;
+            frameErrors = 0;
+            rafId = requestAnimationFrame(onFrame);
+        }
         // Новый заезд с открытой витриной — бессмыслица: закрываем её, а не оставляем
         // висеть поверх свежей партии.
         closeShop();
+        // И то же, что в showOver(): свежая партия начинается с нулевым намерением, а не
+        // с тем, что осталось от пальца на прошлом заезде.
+        drag.release();
         // На всякий случай и здесь: после падения монеты уже в кошельке (record()), но
         // рестарт не должен быть способом потерять собранное ни при каком порядке событий.
         cashOut();
-        cashedOut = false;
+        cashedCoins = 0;
         state = newGame();
         applyInput();
         manualPaused = false;
@@ -543,10 +617,36 @@ function createDoodleJumpScreen(root, api) {
         view.draw(state);
     }
 
-    function onFrame(now) {
-        // Правило 7 контракта: кадр, уже стоящий в очереди, обязан проверить, жив ли
-        // экран, — cancelAnimationFrame его не догонит.
-        if (destroyed) return;
+    // Видимая остановка вместо немого замирания. Экран, на котором ничего не происходит и
+    // ничего не написано, игрок читает как «зависло» — и идёт писать баг-репорт про
+    // зависание, а не про ошибку. Поэтому сдавшийся цикл обязан сказать это словами.
+    function crash() {
+        crashed = true;
+        // Собранное за заезд не пропадает: и монеты, и высота — игрок их набрал, ошибка
+        // не его вина. record() сам зовёт cashOut() и защищён от повторной записи.
+        record();
+        const content = overlay.querySelector('.doodlejump-over-content');
+        content.innerHTML = '<div>Что-то сломалось</div>'
+            + `<div>Высота ${state.score}</div>`
+            + '<button class="doodlejump-over-restart menu_button">Ещё раз</button>';
+        const restartBtn = content.querySelector('.doodlejump-over-restart');
+        restartBtn?.addEventListener('click', () => {
+            restartBtn.blur();
+            restart();
+        });
+        // Витрина открыта — ведём себя как showOver() под витриной: оверлей не показываем
+        // (он оказался бы ПОД ней и запер бы экран), а помечаем, что его надо показать
+        // после закрытия. Выход есть в обе стороны: «Закрыть» вернёт оверлей краха, Enter
+        // начнёт новый заезд поверх витрины (restart() её закрывает сам).
+        if (shopOpen()) overBeforeShop = true;
+        else overlay.style.display = 'flex';
+        updateStatus();
+    }
+
+    // Кадр целиком: физика, шапка, отрисовка. Отделён от onFrame(), чтобы планирование
+    // следующего кадра жило СНАРУЖИ try/catch — иначе исключение внутри кадра уносило бы с
+    // собой и планирование, то есть убивало бы игру навсегда и молча (ровно так и было).
+    function runFrame(now) {
         if (lastFrame === null) lastFrame = now;
         const dt = now - lastFrame;
         lastFrame = now;
@@ -571,7 +671,36 @@ function createDoodleJumpScreen(root, api) {
 
         updateHeader();
         updateStatus();
-        view.draw(state);
+        // Витрина закрывает сцену целиком, а скрытый канвас не имеет клиентских размеров:
+        // view.js уходил бы на фолбэк 320×512 и перевыделял буфер каждый кадр. Рисовать
+        // нечего и незачем — картинку вернёт closeShop().
+        if (!shopOpen()) view.draw(state);
+    }
+
+    function onFrame(now) {
+        // Правило 7 контракта: кадр, уже стоящий в очереди, обязан проверить, жив ли
+        // экран, — cancelAnimationFrame его не догонит. То же и для остановки по ошибке:
+        // кадр из очереди не должен воскрешать цикл, который уже сдался.
+        if (destroyed || crashed) return;
+        try {
+            runFrame(now);
+            // Кадр прошёл целиком — серия оборвалась. Считаем именно ПОДРЯД идущие сбои:
+            // одиночная осечка раз в минуту игре не мешает, а копящийся счётчик рано или
+            // поздно остановил бы исправный заезд.
+            frameErrors = 0;
+        } catch (err) {
+            frameErrors += 1;
+            // Логируем каждый сбой серии, но серия ограничена FRAME_ERROR_LIMIT — потока в
+            // консоль по кадру на каждый rAF не будет.
+            logError(`ошибка в кадре дудл джампа (подряд ${frameErrors})`, err);
+            if (frameErrors >= FRAME_ERROR_LIMIT) {
+                crash();
+                return;
+            }
+            // Часы кадра сбрасываем: время, пока разбирались с ошибкой, накопилось бы в
+            // dt и следующий кадр прыгнул бы вслепую на восемь подшагов.
+            lastFrame = null;
+        }
         rafId = requestAnimationFrame(onFrame);
     }
 
@@ -582,13 +711,23 @@ function createDoodleJumpScreen(root, api) {
         },
         // Пока открыт магазин, пауза и рестарт с клавиатуры игнорируются: партия и так
         // стоит, а Enter не должен начинать новый заезд за спиной у витрины.
+        //
+        // Оба возвращают «сделал»: по этому признаку controls.js решает, гасить клавишу
+        // или отдать её дальше. Пробел при открытой витрине не наш — им прокручивают
+        // список скинов.
         onPause: () => {
-            if (shopOpen()) return;
+            if (shopOpen()) return false;
             manualPaused = !manualPaused;
             updateStatus();
+            return true;
         },
         onRestart: () => {
-            if (!state.alive && !shopOpen()) restart();
+            // После остановки по ошибке Enter — единственный выход, поэтому он работает
+            // и при живой партии, и поверх открытой витрины (restart() её закрывает).
+            // Без краха витрина Enter не пропускает: начинать заезд за её спиной незачем.
+            if (!crashed && (state.alive || shopOpen())) return false;
+            restart();
+            return true;
         },
     });
 
@@ -650,7 +789,13 @@ function createDoodleJumpScreen(root, api) {
         destroy() {
             if (destroyed) return;
             destroyed = true;
-            cashOut();
+            // Брошенный заезд записывается целиком, а не наполовину. «Сыграно» на старте
+            // уже отработало, монеты забирает cashOut() — оставлять при этом высоту
+            // незаписанной значит терять данные: заезд числится сыгранным, но без
+            // результата. Обоснование то же, что у монет («отбирать собранное за то, что
+            // окно закрыли, — наказание на ровном месте»), а от двойной записи защищает
+            // overRecorded.
+            record();
             if (rafId) cancelAnimationFrame(rafId);
             keyboard.destroy();
             buttons.destroy();
