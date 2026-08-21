@@ -1,0 +1,2966 @@
+/* Стили расширения STGames. Всё под префиксом .djst- (оболочка и хаб), .sudoku- и
+   .snake- (игры), никаких голых селекторов тегов: расширение живёт внутри чужого DOM
+   и не должно задевать вёрстку SillyTavern.
+
+   Цвета игры берут не из темы ST напрямую, а из общего слоя переменных --djst-* (блок
+   «Палитра» ниже). Режим палитры ставит src/shell/appearance.js атрибутом
+   data-djst-theme на .djst-root: light/dark — самодостаточные наборы, theme — прежнее
+   поведение, цвета темы таверны. */
+
+/* --- Панель настроек ---
+ *
+ * Панель живёт в Extensions drawer таверны, вне .djst-root, поэтому переменных --djst-*
+ * здесь нет. Цвета — только нейтральная серая полупрозрачность (rgba(128,128,128,…)):
+ * она читается и на светлых, и на тёмных темах ST и ничего не занимает у темы.
+ *
+ * Раскладка: карточка «Оформление», затем аккордеон игр — по свёрнутой секции на игру.
+ */
+
+.djst-settings .djst-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+}
+
+/* Подпись тянется, контрол прижимается к правому краю — так у всех строк секции
+   получается общая колонка значений, а не рваный край. */
+.djst-settings .djst-row > label:not(.checkbox_label) {
+    flex: 1 1 auto;
+}
+
+.djst-settings select.text_pole {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 55%;
+}
+
+/* Шапка блока статистики: «Статистика» слева, «Сбросить» справа. Одно правило на все
+   игры — каждая называет свою строку <игра>-stats-header. */
+.djst-settings .djst-row[class*="-stats-header"] {
+    justify-content: space-between;
+}
+
+.djst-settings .djst-section-heading,
+.djst-settings .djst-games-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.djst-settings .djst-games-heading {
+    margin: 12px 0 8px;
+}
+
+.djst-settings .djst-games-heading small {
+    opacity: 0.6;
+    font-size: 0.8em;
+}
+
+/* Общий блок панели — оформление игр. Отбит от блоков игр снизу, чтобы «Оформление» не
+   читалось как настройка первой в списке игры. */
+.djst-common-settings {
+    padding: 10px 12px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 10px;
+    background-color: rgba(128, 128, 128, 0.06);
+}
+
+.djst-settings-hint {
+    display: block;
+    margin-top: 4px;
+    opacity: 0.7;
+    font-size: 0.8em;
+    line-height: 1.35;
+}
+
+.djst-settings-footnote {
+    display: block;
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(128, 128, 128, 0.25);
+    opacity: 0.6;
+    font-size: 0.8em;
+}
+
+/* --- Аккордеон игр --- */
+
+.djst-game-settings {
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.djst-game-settings + .djst-game-settings {
+    margin-top: 6px;
+}
+
+.djst-game-settings.djst-game-open {
+    background-color: rgba(128, 128, 128, 0.06);
+}
+
+/* Шапка секции — кнопка внутри чужого DOM: снимаем всё, что мог навесить ST. */
+.djst-game-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.djst-game-toggle:hover,
+.djst-game-toggle:focus-visible {
+    background-color: rgba(128, 128, 128, 0.12);
+    outline: none;
+}
+
+/* Иконки игр разной ширины — фиксированная колонка держит названия на одной линии. */
+.djst-game-icon {
+    flex: 0 0 1.2em;
+    text-align: center;
+    opacity: 0.85;
+}
+
+.djst-game-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.djst-game-tagline {
+    opacity: 0.6;
+    font-size: 0.8em;
+}
+
+.djst-game-chevron {
+    flex: 0 0 auto;
+    opacity: 0.5;
+    font-size: 0.8em;
+    transition: transform 0.15s ease;
+}
+
+.djst-game-open .djst-game-chevron {
+    transform: rotate(180deg);
+}
+
+.djst-game-body {
+    padding: 2px 12px 10px;
+}
+
+.djst-game-controls:not(:empty) {
+    padding-bottom: 4px;
+}
+
+/* Статистика отбита от контролов линией: внутри секции это второй смысловой блок. */
+.djst-game-controls:not(:empty) + .djst-game-stats:not(:empty) {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+/* Таблица статистики: четыре колонки, уровень по левому краю, числа — по правому,
+   чтобы разряды выстраивались друг под другом. */
+.sudoku-stats {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 2px 12px;
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.sudoku-stats-row {
+    display: contents;
+}
+
+.sudoku-stats-row > span:not(:first-child) {
+    text-align: right;
+}
+
+.sudoku-stats-row.sudoku-stats-head > span {
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* Та же таблица, что у судоку, но колонок шесть: уровень, сыграно, победы, поражения,
+   ничьи и лучший разрыв. Шире она не выходит — числа однозначные. */
+.reversi-stats {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto auto;
+    gap: 2px 10px;
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.reversi-stats-row {
+    display: contents;
+}
+
+.reversi-stats-row > span:not(:first-child) {
+    text-align: right;
+}
+
+.reversi-stats-row.reversi-stats-head > span {
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* --- Палитра ---
+ *
+ * Один слой переменных на все игры. Игры не знают ни про --SmartThemeQuoteColor, ни про
+ * --black30a: они пользуются только этими именами, а чем те окажутся — решает режим.
+ *
+ *   --djst-fg             цвет текста
+ *   --djst-bg             подложка всего окна игры (в режиме theme её нет)
+ *   --djst-surface        фон игрового поля: доски, сетки, канваса
+ *   --djst-surface-strong фон элементов поверх поля: закрытая клетка сапёра, клавиша
+ *   --djst-line           волосяная линия разлиновки
+ *   --djst-line-strong    заметная линия: рамка поля, границы боксов
+ *   --djst-tint-soft      лёгкая заливка поверх surface (hover, чётность)
+ *   --djst-tint-strong    сильная заливка (нажатие, выделение)
+ *   --djst-accent         акцент: выбор, курсор, подсказки
+ *   --djst-accent-fg      текст поверх залитого акцентом
+ *   --djst-danger         ошибка, мина, конфликт
+ *   --djst-snake-*        цвета канваса змейки — только литералы и var(), без color-mix:
+ *                        их читает JS через getComputedStyle, а color-mix в значении
+ *                        пользовательского свойства до JS доезжает неразобранным.
+ *   --djst-doodlejump-*   цвета канваса «Дудл Джампа» (фигурка, её глаза, типы платформ) —
+ *                        то же ограничение, что у --djst-snake-*: только литералы и var().
+ *
+ * Значения по умолчанию — режим theme: ровно то, что было до появления палитры.
+ */
+
+.djst-root {
+    --djst-fg: var(--SmartThemeBodyColor, currentColor);
+    --djst-bg: transparent;
+    /* Фолбэк для браузеров без color-mix идёт первым — их движок просто не поймёт
+       вторую строку и оставит первую. Так во всём файле. */
+    --djst-surface: var(--black30a);
+    --djst-surface: color-mix(in srgb, currentColor 5%, transparent);
+    --djst-surface-strong: var(--white30a);
+    --djst-surface-strong: color-mix(in srgb, currentColor 13%, transparent);
+    --djst-line: var(--SmartThemeBorderColor, currentColor);
+    --djst-line: color-mix(in srgb, currentColor 18%, transparent);
+    --djst-line-strong: var(--SmartThemeBorderColor, currentColor);
+    --djst-line-strong: color-mix(in srgb, currentColor 52%, transparent);
+    --djst-tint-soft: var(--black30a);
+    --djst-tint-soft: color-mix(in srgb, currentColor 5%, transparent);
+    --djst-tint-strong: var(--white30a);
+    --djst-tint-strong: color-mix(in srgb, currentColor 14%, transparent);
+    --djst-accent: var(--SmartThemeQuoteColor, currentColor);
+    --djst-accent-fg: var(--SmartThemeBlurTintColor, #fff);
+    --djst-danger: #c0392b;
+
+    --djst-snake-head: var(--SmartThemeQuoteColor, #6ca0dc);
+    --djst-snake-body: var(--SmartThemeQuoteColor, #6ca0dc);
+    --djst-snake-grid: var(--SmartThemeBorderColor, #888);
+    --djst-snake-food: #e0533d;
+
+    /* «Дудл Джамп». Фигурка и обычная платформа — из темы, цвета типов платформ несут
+       смысл (какая платформа под ногами) и потому заданы литералами во всех режимах:
+       перекрасить их по палитре значило бы стереть различие. */
+    --djst-doodlejump-player: var(--SmartThemeQuoteColor, #6ca0dc);
+    --djst-doodlejump-player-eye: var(--SmartThemeBlurTintColor, #14161b);
+    --djst-doodlejump-platform: var(--SmartThemeBorderColor, #888);
+    --djst-doodlejump-platform-moving: #7fae5a;
+    --djst-doodlejump-platform-crumbling: #b58a4a;
+    --djst-doodlejump-spring: #e0c34d;
+}
+
+/* Тёмная палитра. Не «тема ST потемнее», а свой набор: фон окна чуть светлее чёрного,
+   поле — ещё на ступень светлее, линии белые с альфой. */
+.djst-root[data-djst-theme='dark'] {
+    --djst-fg: #e7e7ea;
+    --djst-bg: #1c1d21;
+    --djst-surface: #26282e;
+    --djst-surface-strong: #33363f;
+    --djst-line: rgba(255, 255, 255, 0.14);
+    --djst-line-strong: rgba(255, 255, 255, 0.42);
+    --djst-tint-soft: rgba(255, 255, 255, 0.06);
+    --djst-tint-strong: rgba(255, 255, 255, 0.16);
+    --djst-accent: #78a9e0;
+    --djst-accent-fg: #14161b;
+    --djst-danger: #e0533d;
+
+    /* Голова заметно светлее тела: в две-три клетки длиной змейка иначе читается как
+       брусок без направления. */
+    --djst-snake-head: #dbeaff;
+    --djst-snake-body: #5b8ec9;
+    --djst-snake-grid: rgba(255, 255, 255, 0.14);
+    --djst-snake-food: #e0533d;
+
+    /* Фигурка светлая, глаза — цвета фона окна: на тёмном поле иначе не читаются. */
+    --djst-doodlejump-player: #9ccbff;
+    --djst-doodlejump-player-eye: #14161b;
+    --djst-doodlejump-platform: #8d919b;
+    --djst-doodlejump-platform-moving: #7fae5a;
+    --djst-doodlejump-platform-crumbling: #b58a4a;
+    --djst-doodlejump-spring: #e0c34d;
+}
+
+/* Светлая палитра. Поле белое, а подложка окна — тёплый серый: белое поле на белом окне
+   теряет края, а рамкой это не лечится (у сапёра и нонограммы её нет). */
+.djst-root[data-djst-theme='light'] {
+    --djst-fg: #22242a;
+    --djst-bg: #f2f0ec;
+    --djst-surface: #ffffff;
+    --djst-surface-strong: #dedbd4;
+    --djst-line: rgba(0, 0, 0, 0.18);
+    --djst-line-strong: rgba(0, 0, 0, 0.45);
+    --djst-tint-soft: rgba(0, 0, 0, 0.05);
+    --djst-tint-strong: rgba(0, 0, 0, 0.13);
+    --djst-accent: #2f6fb5;
+    --djst-accent-fg: #ffffff;
+    --djst-danger: #c0392b;
+
+    /* Голова заметно темнее тела — см. комментарий в тёмной палитре. */
+    --djst-snake-head: #143354;
+    --djst-snake-body: #5b93cf;
+    --djst-snake-grid: rgba(0, 0, 0, 0.16);
+    --djst-snake-food: #c0392b;
+
+    /* На белом поле фигурка тёмная, глаза — светлые: та же пара наоборот. */
+    --djst-doodlejump-player: #2f6fb5;
+    --djst-doodlejump-player-eye: #ffffff;
+    --djst-doodlejump-platform: #6f737b;
+    --djst-doodlejump-platform-moving: #4f7c34;
+    --djst-doodlejump-platform-crumbling: #8a6528;
+    --djst-doodlejump-spring: #b08f14;
+}
+
+/* Своя палитра — своя подложка: без неё шапка окна и подписи остались бы цветом темы ST
+   поверх собственного фона игр, а попап таверны полупрозрачный и лежит поверх аватара —
+   светлый текст на светлом поле именно так и получался. В режиме theme подложки нет:
+   там окно по-прежнему просвечивает попап, как и задумано. */
+.djst-root[data-djst-theme='light'],
+.djst-root[data-djst-theme='dark'] {
+    padding: 12px;
+    border-radius: 12px;
+    background-color: var(--djst-bg);
+    /* Явно, а не в надежде на сброс ST: с content-box поля подложки прибавились бы к
+       max-width: 100% и окно вылезло бы за попап ровно на 24px. */
+    box-sizing: border-box;
+}
+
+/* Кнопки и селекты внутри окна — разметка SillyTavern (.menu_button, .text_pole), и
+   свою палитру они не знают: на светлом окне оставались чёрными плашками темы, а серый
+   текст селекта на сером фоне ST не читался вовсе. В режимах light/dark перекрашиваем
+   их под окно; в theme не трогаем — там оформление и должно быть таверны.
+   Селектор двухклассовый — этого хватает, чтобы перебить одноклассовые правила ST. */
+.djst-root[data-djst-theme='light'] .menu_button,
+.djst-root[data-djst-theme='dark'] .menu_button,
+.djst-root[data-djst-theme='light'] .text_pole,
+.djst-root[data-djst-theme='dark'] .text_pole {
+    border: 1px solid var(--djst-line-strong);
+    background-color: var(--djst-surface);
+    color: var(--djst-fg);
+    /* Тени и подсветки тем ST рассчитаны на их собственный фон и на нашем дают ореол. */
+    text-shadow: none;
+    box-shadow: none;
+    opacity: 1;
+}
+
+.djst-root[data-djst-theme='light'] .menu_button:hover,
+.djst-root[data-djst-theme='dark'] .menu_button:hover {
+    background-color: var(--djst-tint-strong);
+    color: var(--djst-fg);
+}
+
+/* Выпадающий список рисуется вне окна и цвет от селекта не наследует — задаём прямо. */
+.djst-root[data-djst-theme='light'] .text_pole option,
+.djst-root[data-djst-theme='dark'] .text_pole option {
+    background-color: var(--djst-bg);
+    color: var(--djst-fg);
+}
+
+/* --- Оболочка: корень, шапка, экран --- */
+
+.djst-root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+/* Корень окна и экран каждой игры фокусируемы программно (tabIndex = -1): фокус им нужен,
+   чтобы клавиши шли в игру, а не в select'ы попапа. Рамки фокуса им не нужно: жест по
+   полю (росчерк в балде и нонограмме) уводит фокус на экран игры, и тема таверны
+   обводила ВСЁ окно своей рамкой — на тёмной палитре это оранжевый прямоугольник во
+   весь экран. Клеткам и кнопкам рамка остаётся: их правила :focus-visible объявлены
+   ниже по файлу и эту перебивают. */
+.djst-root:focus,
+.djst-screen:focus,
+.sudoku-root:focus,
+.reversi-root:focus,
+.words-root:focus,
+.minesweeper-root:focus,
+.nonogram-root:focus,
+.crossword-root:focus,
+.balda-root:focus,
+.doodlejump-root:focus {
+    outline: none;
+}
+
+.djst-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 2px 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.djst-back {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.9em;
+    padding: 4px 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.djst-back:hover {
+    background-color: var(--djst-tint-soft);
+}
+
+.djst-title {
+    font-weight: 600;
+}
+
+.djst-screen {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* --- Хаб: сетка плиток игр --- */
+
+.djst-hub {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+}
+
+.djst-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 96px;
+    padding: 10px 8px;
+    /* Кнопка внутри чужого DOM: снимаем всё, что мог навесить ST или браузер. */
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.djst-tile:hover,
+.djst-tile:focus-visible {
+    border-color: var(--djst-accent);
+    background-color: var(--djst-tint-soft);
+    outline: none;
+}
+
+.djst-tile i {
+    font-size: 1.6em;
+}
+
+.djst-tile-title {
+    font-weight: 600;
+}
+
+.djst-tile-tagline {
+    font-size: 0.75em;
+    opacity: 0.8;
+}
+
+/* Последняя сыгранная игра — тонкая рамка акцентом темы. */
+.djst-tile-last {
+    border-color: var(--djst-accent);
+}
+
+/* --- Окно игры: судоку --- */
+
+.sudoku-root {
+    /* Размер доски. Ограничений три: ширина экрана, его высота (под доской ещё ряд
+       цифр, кнопки и статус — им нужно около 150px) и потолок на десктопе, чтобы
+       окно не расползалось на пол-монитора. */
+    --sudoku-size: clamp(232px, min(86vw, 56vh), 380px);
+    /* Желаемый размер клетки. Реальный может быть меньше (доску режет max-width в узком
+       попапе), поэтому шрифты считаются в cqw от самой доски, а --sudoku-cell остался
+       фолбэком для браузеров без container queries. */
+    --sudoku-cell: calc(var(--sudoku-size) / 9);
+
+    /* Палитра — из общего слоя --djst-* (см. блок «Палитра»). Свои имена остаются: по ним
+       видно, где у судоку что, а править сразу все игры удобнее в одном месте. */
+    --sudoku-accent: var(--djst-accent);
+    --sudoku-danger: var(--djst-danger);
+    --sudoku-tint-soft: var(--djst-tint-soft);
+    --sudoku-tint-strong: var(--djst-tint-strong);
+    /* Сетка рисуется двумя градациями одного цвета, а не толщиной линий: волосяные
+       линии внутри бокса и заметные — между боксами. Так доска читается структурно,
+       но не выглядит начерченной маркером. */
+    --sudoku-line: var(--djst-line);
+    --sudoku-line-strong: var(--djst-line-strong);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.sudoku-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: var(--sudoku-size);
+    max-width: 100%;
+}
+
+.sudoku-header .sudoku-select {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+.sudoku-timer {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+.sudoku-hidden {
+    visibility: hidden;
+}
+
+.sudoku-status {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+/* --- Доска --- */
+
+.sudoku-board {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    width: var(--sudoku-size);
+    max-width: 100%;
+    /* Высота считается от фактической ширины, а не от --sudoku-size: 92vw не знает про
+       поля попапа ST, и на телефоне max-width режет доску уже желаемого. С фиксированной
+       высотой клетки выходили выше своей ширины — доска переставала быть квадратной. */
+    aspect-ratio: 1;
+    /* Контейнер для cqw ниже: размеры цифр и пометок берутся от реальной ширины доски. */
+    container-type: inline-size;
+    border: 1px solid var(--sudoku-line-strong);
+    border-radius: 10px;
+    background-color: var(--djst-surface);
+    /* Линии сетки рисуются границами клеток; собственные границы доски снаружи. */
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+.sudoku-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--sudoku-line);
+    border-left: 1px solid var(--sudoku-line);
+    /* Клетка — 1/9 ширины доски, то есть 11.11cqw; цифра — половина клетки. Фолбэк
+       для браузеров без container queries идёт первым (там доска = --sudoku-size). */
+    font-size: calc(var(--sudoku-cell) * 0.5);
+    font-size: 5.55cqw;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+    /* Клик по клетке не должен уводить фокус из окна игры (важно для клавиатуры). */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Первая клетка строки/столбца не рисует внешнюю линию — её рисует рамка доски. */
+.sudoku-cell:nth-child(-n + 9) {
+    border-top: none;
+}
+
+.sudoku-cell:nth-child(9n + 1) {
+    border-left: none;
+}
+
+/* Границы боксов: data-атрибуты проставляются в board.js. Толщина та же, отличается
+   только цвет — утолщение до 2px сдвигало клетки и делало сетку рубленой. */
+.sudoku-cell[data-box-left] {
+    border-left-color: var(--sudoku-line-strong);
+}
+
+.sudoku-cell[data-box-top] {
+    border-top-color: var(--sudoku-line-strong);
+}
+
+.sudoku-value {
+    pointer-events: none;
+}
+
+/* Подсказки отличаются от введённых цифр не жирностью, а цветом: жирный шрифт в
+   каждой второй клетке делал доску тяжёлой. Подсказка — обычный цвет текста,
+   ввод игрока — акцент темы (правило ниже). */
+.sudoku-cell.sudoku-given {
+    font-weight: 500;
+    cursor: default;
+}
+
+/* Цифры, введённые игроком, — акцентным цветом темы. */
+.sudoku-cell.sudoku-filled:not(.sudoku-given) .sudoku-value {
+    color: var(--sudoku-accent);
+}
+
+/* Клетки с той же цифрой, что и в выбранной. Строку/столбец/бокс не подсвечиваем:
+   заливка трёх юнитов забивает доску сильнее, чем помогает её читать. */
+.sudoku-cell.sudoku-same {
+    background-color: var(--sudoku-tint-strong);
+}
+
+/* Выбранная клетка — мягкая заливка акцентом и тонкая рамка, а не сплошной акцент:
+   на светлых темах светлый текст по светлому акценту переставал читаться. */
+.sudoku-cell.sudoku-selected {
+    background-color: var(--sudoku-tint-strong);
+    background-color: color-mix(in srgb, var(--sudoku-accent) 18%, transparent);
+    box-shadow: inset 0 0 0 1px var(--sudoku-accent);
+}
+
+.sudoku-cell.sudoku-conflict .sudoku-value {
+    color: var(--sudoku-danger);
+}
+
+.sudoku-cell.sudoku-conflict {
+    background-color: rgba(224, 83, 61, 0.1);
+    background-color: color-mix(in srgb, var(--sudoku-danger) 12%, transparent);
+}
+
+/* Ошибка (цифра не совпала с решением) — цветом и чертой под цифрой, а не заливкой:
+   ошибка часто совпадает с конфликтом, и две заливки поверх друг друга не читались бы. */
+.sudoku-cell.sudoku-mistake .sudoku-value {
+    color: var(--sudoku-danger);
+    text-decoration: underline;
+    text-decoration-color: var(--sudoku-danger);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.14em;
+}
+
+.sudoku-board-done {
+    border-color: var(--sudoku-accent);
+    box-shadow: 0 0 0 1px var(--sudoku-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--sudoku-accent) 45%, transparent);
+}
+
+/* --- Пометки --- */
+
+.sudoku-notes {
+    position: absolute;
+    inset: 2px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    font-size: calc(var(--sudoku-cell) * 0.26);
+    font-size: 2.89cqw;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.sudoku-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+}
+
+.sudoku-note.sudoku-note-on {
+    opacity: 0.75;
+}
+
+/* В заполненной клетке пометок нет — прячем сетку целиком, чтобы не мешала цифре. */
+.sudoku-cell.sudoku-filled .sudoku-notes {
+    display: none;
+}
+
+/* --- Ряд цифр: экранный numpad и счётчик оставшихся в одном элементе --- */
+
+.sudoku-remaining {
+    display: grid;
+    /* minmax(0, 1fr), а не 1fr: у голого 1fr минимум — min-content кнопки, и на узком
+       экране ряд не сжимается, а вылезает за правый край (последние цифры обрезаются). */
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 4px;
+    width: var(--sudoku-size);
+    max-width: 100%;
+    /* Ряд ровно той же ширины, что доска, — цифры в нём меряются так же, в cqw. */
+    container-type: inline-size;
+    font-variant-numeric: tabular-nums;
+}
+
+.sudoku-remaining-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    /* Ширину задаёт грид (ряд ровно по ширине доски), поэтому своего минимума у кнопки
+       нет — иначе девять кнопок не влезают в ряд. Под палец работает высота: 40px —
+       нижняя граница, при которой по цифре ещё можно уверенно попасть на телефоне. */
+    min-width: 0;
+    min-height: 40px;
+    padding: 4px 0 3px;
+    /* Кнопка внутри чужого DOM: снимаем всё, что мог навесить ST или браузер. */
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--sudoku-line);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sudoku-remaining-item:hover {
+    border-color: var(--sudoku-line-strong);
+    background-color: var(--sudoku-tint-soft);
+}
+
+.sudoku-remaining-item:active {
+    background-color: var(--sudoku-tint-strong);
+}
+
+.sudoku-remaining-digit {
+    color: var(--sudoku-accent);
+    font-size: calc(var(--sudoku-cell) * 0.46);
+    font-size: 5.11cqw;
+    line-height: 1;
+}
+
+.sudoku-remaining-left {
+    font-size: 0.65em;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+/* Цифра выставлена вся — кнопка гаснет, но остаётся на месте: ряд не должен
+   дёргаться по ширине на каждом ходе. */
+.sudoku-remaining-item.sudoku-remaining-done {
+    opacity: 0.3;
+}
+
+/* --- Панель действий --- */
+
+.sudoku-pad-actions {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sudoku-pad-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+/* Режим заметок включён — кнопка залита акцентным цветом темы. */
+.sudoku-pad-action.sudoku-pad-on {
+    background-color: var(--sudoku-accent);
+    color: var(--djst-accent-fg);
+}
+
+/* Нечего отменять/возвращать: кнопка приглушена, но не disabled — фокус не прыгает. */
+.sudoku-pad-action.sudoku-pad-off {
+    opacity: 0.55;
+}
+
+/* В режиме заметок доска отдаёт другой курсор — подсказка, что цифра уйдёт в пометки. */
+.sudoku-board.sudoku-board-notes .sudoku-cell:not(.sudoku-given) {
+    cursor: cell;
+}
+
+/* --- Фолбэк-оверлей (когда попапа ST нет) --- */
+
+.djst-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--black70a);
+}
+
+/* Оверлей лежит снаружи .djst-root, поэтому переменные --sudoku-* сюда не доходят —
+   цвета берутся из темы ST напрямую. */
+.djst-dialog {
+    position: relative;
+    padding: 20px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 10px;
+    background-color: var(--SmartThemeBlurTintColor);
+    backdrop-filter: blur(10px);
+    max-height: 90vh;
+    overflow: auto;
+}
+
+.djst-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 1.2em;
+}
+
+.djst-close:hover {
+    opacity: 1;
+}
+
+/* --- Змейка --- */
+
+.snake-root {
+    /* Поле змейки: те же три ограничения, что у доски судоку — ширина экрана,
+       его высота (под полем шапка, d-pad и статус) и потолок на десктопе. */
+    --snake-size: clamp(232px, min(86vw, 56vh), 380px);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.snake-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: var(--snake-size);
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.snake-stage {
+    /* Квадрат по факту, а не по желанию: max-width режет ширину до попапа ST раньше,
+       чем --snake-size, а высота раньше оставалась желаемой — отсюда овальная еда на
+       узком экране. aspect-ratio держит высоту равной фактической, а не расчётной ширине. */
+    position: relative;
+    width: var(--snake-size);
+    max-width: 100%;
+    aspect-ratio: 1;
+}
+
+.snake-view {
+    width: 100%;
+    height: 100%;
+}
+
+.snake-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 10px;
+    background-color: var(--djst-surface);
+    touch-action: none;
+}
+
+/* Пунктир = стены сквозные: игрок должен видеть режим, не открывая настройки. */
+.snake-canvas-wrap {
+    border-style: dashed;
+}
+
+.snake-dpad {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 44px;
+}
+
+.snake-dpad-grid {
+    display: grid;
+    grid-template-areas:
+        '. up .'
+        'left . right'
+        '. down .';
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(3, 44px);
+    gap: 4px;
+}
+
+.snake-dpad-up {
+    grid-area: up;
+}
+
+.snake-dpad-down {
+    grid-area: down;
+}
+
+.snake-dpad-left {
+    grid-area: left;
+}
+
+.snake-dpad-right {
+    grid-area: right;
+}
+
+.snake-dpad-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.snake-dpad-btn:hover {
+    border-color: var(--djst-accent);
+    background-color: var(--djst-tint-soft);
+}
+
+.snake-dpad-pause {
+    padding: 0 14px;
+}
+
+/* Оверлей поверх поля (не корня): только затемняет канвас, не трогая шапку и d-pad. */
+.snake-over {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0.55);
+    background-color: color-mix(in srgb, var(--djst-surface) 82%, transparent);
+    color: var(--djst-fg);
+}
+
+.snake-status {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+/* --- Дудл Джамп --- */
+
+.doodlejump-root {
+    /* В отличие от квадратных полей судоку/змейки ведущий размер тут высота: поле
+       портретное (400×640 wu), и в попапе его ограничивает не ширина, а вертикаль —
+       под полем ещё кнопки и строка статуса, над ним шапка. Ширина выводится из высоты
+       через aspect-ratio, а 86vw*1.6 не даёт полю вылезти вбок на узком экране. */
+    --doodlejump-height: clamp(300px, min(58vh, calc(86vw * 1.6)), 560px);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.doodlejump-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.doodlejump-stage {
+    position: relative;
+    height: var(--doodlejump-height);
+    /* 400:640 мира — ровно 5:8. Ширину считает браузер, поэтому пропорция сохраняется
+       и тогда, когда высоту урезал clamp. */
+    aspect-ratio: 5 / 8;
+    max-width: 100%;
+}
+
+.doodlejump-view {
+    width: 100%;
+    height: 100%;
+}
+
+.doodlejump-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 10px;
+    background-color: var(--djst-surface);
+    touch-action: none;
+}
+
+.doodlejump-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 44px;
+}
+
+.doodlejump-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 76px;
+    min-height: 44px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.doodlejump-btn:hover {
+    border-color: var(--djst-accent);
+    background-color: var(--djst-tint-soft);
+}
+
+/* Оверлей поверх поля (не корня): затемняет канвас, не трогая шапку и кнопки. */
+.doodlejump-over {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0.55);
+    background-color: color-mix(in srgb, var(--djst-surface) 82%, transparent);
+    color: var(--djst-fg);
+}
+
+.doodlejump-over-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.doodlejump-status {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+@media (max-width: 500px) {
+    .doodlejump-root {
+        --doodlejump-height: min(60vh, calc(92vw * 1.6), 560px);
+        gap: 8px;
+    }
+
+    .doodlejump-header {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* На узком экране кнопки растут — попадать в них пальцем проще. */
+    .doodlejump-btn {
+        min-width: 92px;
+        min-height: 48px;
+    }
+}
+
+/* --- Окно игры: реверси --- */
+
+.reversi-root {
+    /* Размер доски. Ограничений три: ширина экрана, его высота (под доской только шапка
+       и строка статуса — им хватает ~90px, поэтому доля высоты больше, чем у судоку) и
+       потолок на десктопе, чтобы окно не расползалось на пол-монитора. */
+    --reversi-size: clamp(232px, min(86vw, 62vh), 420px);
+    /* Желаемый размер клетки: фолбэк для браузеров без container queries, там доска
+       ровно --reversi-size. Реальный размер может быть меньше (max-width режет доску
+       в узком попапе), поэтому всё внутри клетки считается в cqw от самой доски. */
+    --reversi-cell: calc(var(--reversi-size) / 8);
+
+    /* Палитра — из общего слоя --djst-*. */
+    --reversi-accent: var(--djst-accent);
+    --reversi-line: var(--djst-line);
+    --reversi-felt: var(--djst-surface);
+
+    /* Фишки — единственное в игре, что не берётся из темы: они физически чёрные и белые,
+       и «чёрные фишки цвета акцента» — это уже не реверси. Чтобы обе стороны читались на
+       любой доске, у каждой фишки есть контрастная кромка. */
+    --reversi-black: #1b1b20;
+    --reversi-white: #f1efe8;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.reversi-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: var(--reversi-size);
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Счёт, очередь и уровень в ширину доски одной строкой не помещаются — они переносятся
+   внутри своего блока, а кнопка остаётся справа целой строкой. */
+.reversi-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    min-width: 0;
+}
+
+.reversi-score {
+    font-size: 1.05em;
+}
+
+.reversi-turn,
+.reversi-level {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+.reversi-status {
+    min-height: 1.2em;
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+/* --- Доска --- */
+
+.reversi-board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: var(--reversi-size);
+    max-width: 100%;
+    /* Высота считается от фактической ширины, а не от --reversi-size: 86vw не знает про
+       поля попапа ST, и на телефоне max-width режет доску уже желаемого (грабли Фазы 5). */
+    aspect-ratio: 1;
+    /* Контейнер для cqw ниже: размеры фишек берутся от реальной ширины доски. */
+    container-type: inline-size;
+    border: 1px solid var(--djst-line-strong);
+    border-radius: 10px;
+    background-color: var(--reversi-felt);
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+.reversi-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--reversi-line);
+    border-left: 1px solid var(--reversi-line);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Первая клетка строки/столбца не рисует внешнюю линию — её рисует рамка доски. */
+.reversi-cell:nth-child(-n + 8) {
+    border-top: none;
+}
+
+.reversi-cell:nth-child(8n + 1) {
+    border-left: none;
+}
+
+/* Фишка живёт всегда: пустая клетка держит её сжатой в точку. Так постановка фишки —
+   это переход, а не появление узла, и доска не дёргается перекомпоновкой. */
+.reversi-disc {
+    width: 78%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    /* Кромка в цвет противоположной стороны: чёрная фишка не сливается с тёмной темой,
+       белая — со светлой. */
+    border: 1px solid var(--reversi-line);
+    background-color: transparent;
+    transform: scale(0);
+    /* Переворот: цвет перетекает, а фишка на те же 150 мс сжимается по горизонтали —
+       это читается как поворот, но остаётся одним элементом без двух «граней».
+       Анимация ничего не блокирует: следующий ход можно делать сразу. */
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.reversi-cell.reversi-black .reversi-disc {
+    transform: scale(1) rotateY(0deg);
+    border-color: rgba(255, 255, 255, 0.35);
+    background-color: var(--reversi-black);
+}
+
+.reversi-cell.reversi-white .reversi-disc {
+    transform: scale(1) rotateY(180deg);
+    border-color: rgba(0, 0, 0, 0.35);
+    background-color: var(--reversi-white);
+}
+
+/* Доступный ход — точка, а не заливка клетки: подсказок на доске до четверти клеток,
+   и заливка превратила бы доску в шахматный узор. Точка рисуется на клетке, а не на
+   фишке: фишка в этот момент сжата в ноль. */
+.reversi-cell.reversi-hint::after {
+    content: '';
+    position: absolute;
+    width: 24%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background-color: var(--reversi-accent);
+    opacity: 0.45;
+}
+
+.reversi-cell.reversi-hint:hover::after {
+    opacity: 0.75;
+}
+
+/* Последний ход — кольцо внутри клетки: без метки ход соперника незаметен, доска просто
+   «сама меняется». Кольцо, а не заливка, — чтобы не спорить с подсказками. */
+.reversi-cell.reversi-last {
+    box-shadow: inset 0 0 0 2px var(--reversi-accent);
+}
+
+/* Курсор клавиатуры. Пунктир отличает его от метки последнего хода: они бывают
+   одновременно и на соседних клетках. */
+.reversi-cell.reversi-cursor {
+    outline: 2px dashed var(--reversi-accent);
+    outline-offset: -3px;
+}
+
+.reversi-cell:focus-visible {
+    outline: 2px solid var(--reversi-accent);
+    outline-offset: -3px;
+}
+
+.reversi-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* Анимация переворота — украшение, а не сообщение: тем, кто просил меньше движения,
+   фишка просто меняет цвет. */
+@media (prefers-reduced-motion: reduce) {
+    .reversi-disc {
+        transition: none;
+    }
+}
+
+/* --- Окно игры: слова --- */
+
+.words-root {
+    /* Плитка ограничена И по ширине, И по высоте — грабли Фазы 5. Бюджет высоты на
+       360×640: попап 90vh ≈ 576px, минус шапка попапа и topbar ≈ 490px; сетка ~306 +
+       клавиатура ~132 + зазоры ≈ 486. Влезает впритык, поэтому clamp по высоте — не
+       перестраховка, а условие того, что игра вообще помещается. */
+    --words-tile: clamp(32px, min(16vw, 6.8vh), 56px);
+    --words-gap: 5px;
+
+    /* Цвета состояний фиксированные, а не из темы: зелёный и жёлтый здесь — не
+       украшение, а само сообщение игры, и «жёлтый цвета акцента» перестал бы читаться.
+       Контраст с белым текстом держится в обеих темах ST. */
+    --words-correct: #4f8a45;
+    --words-present: #b59f3b;
+    --words-absent: var(--djst-surface-strong);
+    --words-line: var(--djst-line-strong);
+    --words-invalid: var(--djst-danger);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+/* Режим для дальтоников — не «убрать цвет», а другая пара: жёлто-зелёная хуже всего
+   различается при дейтераномалии, самой частой форме. Значки на плитках добавляются
+   ниже, чтобы цвет вообще не был единственным носителем информации. */
+.words-root.words-colorblind {
+    --words-correct: #c2570f;
+    --words-present: #2b7bba;
+}
+
+.words-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.words-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    min-width: 0;
+}
+
+.words-attempts {
+    font-size: 1.05em;
+}
+
+.words-mode {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+.words-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.words-loading,
+.words-status {
+    min-height: 1.2em;
+    font-size: 0.85em;
+    opacity: 0.85;
+    text-align: center;
+}
+
+/* --- Поле --- */
+
+/* Ширина по содержимому: иначе доска растягивается во всю модалку на десктопе и
+   пять букв разъезжаются по экрану. */
+.words-grid {
+    display: grid;
+    grid-template-rows: repeat(6, var(--words-tile));
+    gap: var(--words-gap);
+    width: max-content;
+    max-width: 100%;
+}
+
+.words-row {
+    display: grid;
+    grid-template-columns: repeat(var(--words-cols, 5), var(--words-tile));
+    gap: var(--words-gap);
+}
+
+.words-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--words-line);
+    border-radius: 4px;
+    font-size: calc(var(--words-tile) * 0.5);
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+/* Набранная, но не подтверждённая буква: рамка ярче, заливки нет — цвет появляется
+   только после Enter. */
+.words-tile.words-tile-filled {
+    border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.words-tile-correct,
+.words-tile-present,
+.words-tile-absent {
+    color: #fff;
+    border-color: transparent;
+}
+
+.words-tile-correct {
+    background-color: var(--words-correct);
+}
+
+.words-tile-present {
+    background-color: var(--words-present);
+}
+
+.words-tile-absent {
+    background-color: var(--words-absent);
+    /* Серая плитка — единственная, где заливка полупрозрачная: на светлой теме белый
+       текст на ней не читался бы. */
+    color: inherit;
+}
+
+/* Значки режима дальтоника: ● — на месте, ◐ — есть в слове. Серой плитке значок не
+   нужен: «нет в слове» читается отсутствием заливки. */
+.words-colorblind .words-tile[data-state='correct']::after,
+.words-colorblind .words-tile[data-state='present']::after {
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 0.42em;
+    line-height: 1;
+    opacity: 0.9;
+}
+
+.words-colorblind .words-tile[data-state='correct']::after {
+    content: '●';
+}
+
+.words-colorblind .words-tile[data-state='present']::after {
+    content: '◐';
+}
+
+/* Раскрытие строки: плитки переворачиваются слева направо, задержку каждой ставит
+   ui/grid.js в --words-reveal-delay. Анимация ничего не блокирует — набирать
+   следующее слово можно сразу. */
+@keyframes words-flip {
+    0% { transform: rotateX(0); }
+    50% { transform: rotateX(90deg); }
+    100% { transform: rotateX(0); }
+}
+
+.words-row-reveal .words-tile {
+    animation: words-flip 300ms ease-in-out both;
+    animation-delay: var(--words-reveal-delay, 0ms);
+}
+
+/* Отказ: строка трясётся ~350 мс (столько же держится класс — см. ui/feedback.js). */
+@keyframes words-shake {
+    10%, 90% { transform: translateX(-2px); }
+    30%, 70% { transform: translateX(4px); }
+    50% { transform: translateX(-6px); }
+}
+
+.words-row.words-shake {
+    animation: words-shake 350ms ease-in-out;
+}
+
+.words-row.words-invalid .words-tile {
+    border-color: var(--words-invalid);
+}
+
+/* --- Экранная клавиатура ---
+ *
+ * Обязательна, а не опциональна: в окне игры нет ни одного поля ввода, поэтому на
+ * телефоне системная клавиатура не появится вовсе и букву физически нечем ввести.
+ *
+ * Все три ряда — ровно 24 юнита: 12 букв по 2, 11 букв по 2 (со сдвигом на юнит) и
+ * ⏎ + 9 букв + ⌫ (3 + 18 + 3). Никаких отдельных правил под второй ряд не нужно.
+ */
+
+.words-keyboard {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    max-width: 500px;
+}
+
+.words-keyboard-row {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 4px;
+}
+
+/* Второй ряд короче на юнит с каждой стороны — сдвигаем его первую клавишу, и он
+   центрируется сам.
+
+   Начало и ширина задаются одним свойством намеренно: `grid-column: span 2` — это
+   `grid-column-start: span 2`, и отдельный `grid-column-start: 2` не «сдвигает» клавишу,
+   а затирает span. Клавиша становилась вдвое уже соседних (12px на десктопе, 9 на
+   телефоне) — «Ф» заметно меньше остальных. */
+.words-keyboard-row:nth-child(2) > .words-key:first-child {
+    grid-column: 2 / span 2;
+}
+
+.words-key {
+    grid-column: span 2;
+    min-height: 40px;
+    padding: 0;
+    /* Кнопка внутри чужого DOM: снимаем всё, что мог навесить ST или браузер. Без
+       этого мобильные WebView рисуют клавишу системным стилем и заливка не видна. */
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--djst-surface-strong);
+    color: inherit;
+    font-size: 0.95em;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.words-key-wide {
+    grid-column: span 3;
+}
+
+/* Только для настоящего указателя: тач-браузеры оставляют :hover на последней тронутой
+   клавише до следующего тапа, и подсветка навсегда перекрывала бы раскраску. */
+@media (hover: hover) {
+    .words-key:hover {
+        background-color: var(--djst-tint-strong);
+    }
+}
+
+/* Зелёный и жёлтый на клавише — не оформление, а единственный способ прочитать ответ
+   игры, поэтому эти два правила защищены жёстче остальных:
+     * класс продублирован — раскраска обязана быть специфичнее и :hover (0,2,0), и
+       любого одноклассового правила темы;
+     * !important — против пользовательских тем, которые красят всё подряд вида
+       `body`/`button { background-color: … !important }`: специфичностью такое не
+       перебить, а без цвета игра перестаёт работать вовсе.
+   Больше нигде в проекте !important нет и быть не должно: тут он защищает данные,
+   а не вкус. Плитки сетки — обычные div, до них такие темы не дотягиваются. */
+.words-key.words-key-correct {
+    background-color: var(--words-correct) !important;
+    color: #fff;
+}
+
+.words-key.words-key-present {
+    background-color: var(--words-present) !important;
+    color: #fff;
+}
+
+.words-key-absent {
+    opacity: 0.4;
+}
+
+.words-colorblind .words-key-correct::after {
+    content: '●';
+    font-size: 0.7em;
+    vertical-align: super;
+}
+
+.words-colorblind .words-key-present::after {
+    content: '◐';
+    font-size: 0.7em;
+    vertical-align: super;
+}
+
+/* Анимации — украшение, а не сообщение: результат виден по цвету и подписи, отказ —
+   по красной рамке и тосту. */
+@media (prefers-reduced-motion: reduce) {
+    .words-row-reveal .words-tile,
+    .words-row.words-shake {
+        animation: none;
+    }
+}
+
+/* --- Слова: панель настроек --- */
+
+.words-settings-hint {
+    display: block;
+    margin-left: 24px;
+    opacity: 0.7;
+}
+
+.words-stats-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 4px 0 8px;
+    font-variant-numeric: tabular-nums;
+}
+
+.words-stats-metric {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.words-stats-metric span {
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.words-stats-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-variant-numeric: tabular-nums;
+}
+
+.words-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+}
+
+.words-stats-bar-key,
+.words-stats-bar-value {
+    min-width: 1.4em;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.words-stats-bar-track {
+    flex: 1 1 auto;
+    height: 12px;
+    border-radius: 3px;
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.words-stats-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background-color: #4f8a45;
+}
+
+/* Поражения — своя полоса и свой цвет: их номера попытки не существует. */
+.words-stats-loss .words-stats-bar-fill {
+    background-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+/* --- Окно игры: сапёр --- */
+
+.minesweeper-root {
+    /* Размер поля ограничен и по ширине, и по высоте: под доской строка статуса и
+       подсказка, над ней — шапка с селектором уровня. Потолок на десктопе держит окно
+       в разумных пределах, как у реверси. */
+    --minesweeper-size: clamp(240px, min(88vw, 60vh), 440px);
+
+    --minesweeper-accent: var(--djst-accent);
+    --minesweeper-line: var(--djst-line-strong);
+    /* Закрытая клетка отличается от открытой не оттенком одной «дымки», а ролью:
+       открытая — это фон поля, закрытая — крышка поверх него. */
+    --minesweeper-closed: var(--djst-surface-strong);
+    --minesweeper-open: var(--djst-surface);
+    --minesweeper-boom: var(--djst-danger);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.minesweeper-header {
+    /* flex-wrap здесь не ставим: строка и так ужимается (см. .minesweeper-info и
+       .minesweeper-select) — перенос всей строки на десктопе ломает то, что и без
+       него помещалось в одну (см. крайний случай у кроссворда). */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    /* Не var(--minesweeper-size): в ландшафте поле ограничено высотой и уже контента
+       шапки — жёсткая привязка к его ширине сама обрезала бы подпись уровня раньше,
+       чем находилось место. fit-content — как у ширины самого корня (.minesweeper-root):
+       шапка вписывается в реально доступное место, а не в размер поля. */
+    width: fit-content;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.minesweeper-select {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+}
+
+.minesweeper-info {
+    /* Счётчик и таймер в одну строку не всегда помещаются — переносим внутри блока,
+       как у реверси/слов/балды, а не даём тексту вылезать поверх кнопки. */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-width: 0;
+}
+
+.minesweeper-counter,
+.minesweeper-timer {
+    font-size: 0.95em;
+    opacity: 0.9;
+}
+
+.minesweeper-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.minesweeper-status {
+    min-height: 1.2em;
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+.minesweeper-hint {
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+
+/* --- Поле --- */
+
+.minesweeper-board-box {
+    width: var(--minesweeper-size);
+    max-width: 100%;
+}
+
+.minesweeper-board {
+    display: grid;
+    grid-template-columns: repeat(var(--minesweeper-cols), 1fr);
+    grid-template-rows: repeat(var(--minesweeper-rows), 1fr);
+    gap: 1px;
+    width: 100%;
+    /* Высота считается от фактической ширины: 88vw не знает про поля попапа ST, и на
+       телефоне max-width режет доску уже желаемой (грабли Фазы 5). */
+    aspect-ratio: var(--minesweeper-cols) / var(--minesweeper-rows);
+    /* Контейнер для cqw ниже: размер шрифта в клетке берётся от реальной ширины поля,
+       а не от желаемой. */
+    container-type: inline-size;
+    padding: 2px;
+    border: 1px solid var(--minesweeper-line);
+    border-radius: 8px;
+    background-color: var(--minesweeper-line);
+    overflow: hidden;
+    /* Ни прокрутки, ни зума по двойному тапу: долгое нажатие — это флажок, и браузер
+       не должен принимать его за жест выделения. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.minesweeper-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Ширина клетки — 100cqw/cols, цифра занимает от неё чуть больше половины: так
+       восьмёрка помещается и на поле 16×16, и на 9×9. */
+    font-size: calc(58cqw / var(--minesweeper-cols));
+    font-weight: 700;
+    line-height: 1;
+    background-color: var(--minesweeper-closed);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.minesweeper-cell:hover:not(.minesweeper-open) {
+    background-color: var(--djst-tint-strong);
+    background-color: color-mix(in srgb, var(--djst-fg) 18%, var(--minesweeper-closed));
+}
+
+.minesweeper-cell.minesweeper-open {
+    background-color: var(--minesweeper-open);
+    cursor: default;
+}
+
+/* Цвета цифр фиксированные, а не из темы: цифра здесь — не украшение, а сообщение, и
+   различать их нужно с одного взгляда. Тона средней светлоты читаются и на тёмной
+   теме ST, и на светлой. */
+.minesweeper-n1 { color: #4a90d9; }
+.minesweeper-n2 { color: #4f9d55; }
+.minesweeper-n3 { color: #d05a4e; }
+.minesweeper-n4 { color: #8f6fd0; }
+.minesweeper-n5 { color: #c98b3a; }
+.minesweeper-n6 { color: #3aa8a0; }
+.minesweeper-n7 { color: #b06fa8; }
+.minesweeper-n8 { color: #8a8a8a; }
+
+/* Флажок и мина — псевдоэлементами, а не текстом клетки: текст занят цифрой, и
+   переключать его туда-сюда значило бы каждый раз выбирать, что показать. */
+.minesweeper-cell.minesweeper-flag::after,
+.minesweeper-cell.minesweeper-mine::after,
+.minesweeper-cell.minesweeper-wrong::before {
+    position: absolute;
+    font-size: 0.9em;
+    line-height: 1;
+}
+
+.minesweeper-cell.minesweeper-flag::after {
+    content: '🚩';
+}
+
+.minesweeper-cell.minesweeper-mine::after {
+    content: '💣';
+}
+
+/* Флажок не на мине: показывается сама мина, которой там не было, и перечёркивается.
+   Без этого после взрыва непонятно, где именно была ошибка. */
+.minesweeper-cell.minesweeper-wrong::before {
+    content: '🚩';
+    opacity: 0.45;
+}
+
+.minesweeper-cell.minesweeper-wrong::after {
+    content: '✕';
+    position: absolute;
+    color: var(--minesweeper-boom);
+    font-size: 1em;
+}
+
+.minesweeper-cell.minesweeper-boom {
+    background-color: var(--minesweeper-boom);
+}
+
+.minesweeper-cell.minesweeper-cursor {
+    outline: 2px dashed var(--minesweeper-accent);
+    outline-offset: -2px;
+}
+
+.minesweeper-cell:focus-visible {
+    outline: 2px solid var(--minesweeper-accent);
+    outline-offset: -2px;
+}
+
+/* --- Сапёр: панель настроек --- */
+
+.minesweeper-stats {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 2px 12px;
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.minesweeper-stats-row {
+    display: contents;
+}
+
+.minesweeper-stats-row > span:not(:first-child) {
+    text-align: right;
+}
+
+.minesweeper-stats-row.minesweeper-stats-head > span {
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* --- Окно игры: нонограмма --- */
+
+.nonogram-root {
+    /* Под подсказки уходит примерно четверть поля по каждой стороне, поэтому потолок
+       больше, чем у сапёра: сама сетка получается меньше своего размера. */
+    --nonogram-size: clamp(240px, min(90vw, 58vh), 460px);
+
+    --nonogram-accent: var(--djst-accent);
+    --nonogram-line: var(--djst-line);
+    /* Толстая линия каждые пять клеток — та, по которой отсчитывают ряды. */
+    --nonogram-block: var(--djst-line-strong);
+    /* Закрашенная клетка — почти цвет текста: рисунок должен читаться как рисунок.
+       Фолбэк для браузеров без color-mix идёт первым. */
+    --nonogram-fill: var(--djst-fg);
+    --nonogram-fill: color-mix(in srgb, var(--djst-fg) 88%, transparent);
+    --nonogram-wrong: var(--djst-danger);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.nonogram-header {
+    /* flex-wrap здесь не ставим: см. комментарий у .minesweeper-header. */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    /* Не var(--nonogram-size): см. комментарий у .minesweeper-header — то же решение. */
+    width: fit-content;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.nonogram-select {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+}
+
+.nonogram-info {
+    /* Счётчик и таймер в одну строку не всегда помещаются — переносим внутри блока,
+       как у реверси/слов/балды, а не даём тексту вылезать поверх кнопки. */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-width: 0;
+}
+
+.nonogram-left,
+.nonogram-timer {
+    font-size: 0.95em;
+    opacity: 0.9;
+}
+
+.nonogram-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.nonogram-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: var(--nonogram-size);
+    max-width: 100%;
+}
+
+.nonogram-mode {
+    flex: 0 0 auto;
+}
+
+/* Режим крестика отмечается рамкой акцента: подпись меняется тоже, но глазом ловится
+   именно рамка. */
+.nonogram-mode.nonogram-mode-cross {
+    box-shadow: inset 0 0 0 2px var(--nonogram-accent);
+}
+
+.nonogram-status {
+    font-size: 0.85em;
+    opacity: 0.85;
+    min-height: 1.2em;
+}
+
+/* --- Поле и подсказки --- */
+
+.nonogram-board-box {
+    width: var(--nonogram-size);
+    max-width: 100%;
+}
+
+/* Четыре области: пустой угол, подсказки столбцов, подсказки строк и сама сетка.
+   Ширина колонки подсказок задаётся в долях клетки, поэтому на любом уровне поле
+   остаётся квадратным, а числа — читаемыми. */
+.nonogram-layout {
+    --nonogram-clue-cells: 4;
+
+    display: grid;
+    grid-template-columns: calc(100% * var(--nonogram-clue-cells) / (var(--nonogram-cols) + var(--nonogram-clue-cells))) 1fr;
+    grid-template-rows: auto 1fr;
+    width: 100%;
+    container-type: inline-size;
+    /* Ни прокрутки, ни зума по двойному тапу: поле рисуется росчерком, и браузер не
+       должен принимать его за жест прокрутки. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.nonogram-clues {
+    display: grid;
+    /* Число подсказки считается от ширины поля: на 15 столбцах шрифт мельче, чем на
+       пяти, ровно во столько же раз. */
+    font-size: calc(46cqw / var(--nonogram-cols));
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
+}
+
+.nonogram-clues-cols {
+    grid-column: 2;
+    grid-template-columns: repeat(var(--nonogram-cols), 1fr);
+    align-items: end;
+}
+
+.nonogram-clues-rows {
+    grid-row: 2;
+    grid-template-rows: repeat(var(--nonogram-rows), 1fr);
+    justify-items: end;
+}
+
+.nonogram-clue {
+    display: flex;
+    padding: 2px;
+}
+
+.nonogram-clue-col {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1px;
+}
+
+.nonogram-clue-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+/* Разделители каждые пять рядов — те же, что на самом поле: подсказки и сетка должны
+   читаться как одна разлиновка. */
+.nonogram-clue.nonogram-block {
+    box-shadow: inset 1px 0 0 var(--nonogram-block);
+}
+
+.nonogram-clue-row.nonogram-block {
+    box-shadow: inset 0 1px 0 var(--nonogram-block);
+}
+
+/* Выполненная подсказка гаснет — глаз перестаёт её перечитывать. */
+.nonogram-clue.nonogram-done {
+    opacity: 0.35;
+}
+
+.nonogram-board {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(var(--nonogram-cols), 1fr);
+    grid-template-rows: repeat(var(--nonogram-rows), 1fr);
+    /* Высота считается от фактической ширины сетки, а не от --nonogram-size: поля
+       попапа ST в vw не входят (грабли Фазы 5). */
+    aspect-ratio: var(--nonogram-cols) / var(--nonogram-rows);
+    border: 1px solid var(--nonogram-block);
+    background-color: var(--djst-surface);
+}
+
+.nonogram-cell {
+    position: relative;
+    border-top: 1px solid var(--nonogram-line);
+    border-left: 1px solid var(--nonogram-line);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.nonogram-cell.nonogram-block-left {
+    border-left-color: var(--nonogram-block);
+}
+
+.nonogram-cell.nonogram-block-top {
+    border-top-color: var(--nonogram-block);
+}
+
+.nonogram-cell.nonogram-fill {
+    background-color: var(--nonogram-fill);
+}
+
+/* Крестик — псевдоэлементом, а не текстом: символ в клетке пришлось бы масштабировать
+   под размер поля, а две линии одинаково выглядят на 5×5 и на 15×15. */
+.nonogram-cell.nonogram-cross::before,
+.nonogram-cell.nonogram-cross::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 20%;
+    width: 60%;
+    height: 1px;
+    background-color: currentColor;
+    opacity: 0.55;
+}
+
+.nonogram-cell.nonogram-cross::before {
+    transform: rotate(45deg);
+}
+
+.nonogram-cell.nonogram-cross::after {
+    transform: rotate(-45deg);
+}
+
+/* Ошибка — только по настройке: по умолчанию нонограмма ничего не подсказывает. */
+.nonogram-cell.nonogram-wrong {
+    background-color: var(--nonogram-wrong);
+}
+
+.nonogram-cell.nonogram-cursor {
+    outline: 2px dashed var(--nonogram-accent);
+    outline-offset: -2px;
+}
+
+.nonogram-cell:focus-visible {
+    outline: 2px solid var(--nonogram-accent);
+    outline-offset: -2px;
+}
+
+/* --- Нонограмма: панель настроек --- */
+
+.nonogram-stats {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 2px 12px;
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.nonogram-stats-row {
+    display: contents;
+}
+
+.nonogram-stats-row > span:not(:first-child) {
+    text-align: right;
+}
+
+.nonogram-stats-row.nonogram-stats-head > span {
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* --- Узкие экраны --- */
+
+@media (max-width: 500px) {
+    .sudoku-root {
+        /* Доска не тянется во всю ширину: под ней должен помещаться ряд цифр,
+           иначе вводить на телефоне нечем. */
+        --sudoku-size: min(92vw, 58vh, 380px);
+        gap: 10px;
+    }
+
+    .sudoku-header {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* На узком экране подписи кнопок съедают ширину — остаются одни иконки. */
+    .sudoku-pad-action-label {
+        display: none;
+    }
+
+    .sudoku-remaining {
+        gap: 3px;
+    }
+
+    .sudoku-remaining-item {
+        min-height: 42px;
+    }
+
+    .snake-root {
+        --snake-size: min(92vw, 58vh, 380px);
+        gap: 8px;
+    }
+
+    .snake-header {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* На узком экране кнопки d-pad растут — попадать в них пальцем проще. */
+    .snake-dpad-grid {
+        grid-template-columns: repeat(3, 48px);
+        grid-template-rows: repeat(3, 48px);
+    }
+
+    .snake-dpad-btn {
+        min-height: 48px;
+    }
+
+    .reversi-root {
+        /* Под доской только строка статуса, поэтому доля высоты больше, чем у судоку:
+           на телефоне доска ограничена шириной, а не высотой. */
+        --reversi-size: min(92vw, 64vh, 420px);
+        gap: 10px;
+    }
+
+    /* На телефоне текст шапки переносится в две-три строки — прижимаем его к левому
+       краю, чтобы кнопка справа не прыгала по вертикали вслед за числом строк. */
+    .reversi-info {
+        align-items: flex-start;
+    }
+
+    .minesweeper-root {
+        /* Под полем только строка статуса — доля высоты больше, чем у судоку. Шире
+           92vw поле не растёт: на 16 столбцах клетка и так меньше пальца, и лишние
+           проценты ширины дают меньше, чем стоят полями попапа. */
+        --minesweeper-size: min(92vw, 62vh, 440px);
+        gap: 8px;
+    }
+
+    /* На телефоне шапка не помещается одной строкой: селектор уровня уходит на свою. */
+    .minesweeper-header {
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .minesweeper-select {
+        max-width: 100%;
+        flex: 1 1 100%;
+        order: -1;
+    }
+
+    .nonogram-root {
+        --nonogram-size: min(94vw, 60vh, 460px);
+        gap: 8px;
+    }
+
+    /* Как и у сапёра: селектор уровня уходит на свою строку, счётчики и кнопка
+       остаются одной. */
+    .nonogram-header {
+        flex-wrap: wrap;
+    }
+
+    .nonogram-select {
+        max-width: 100%;
+        flex: 1 1 100%;
+        order: -1;
+    }
+
+    /* Мобильные правила кроссворда живут не здесь, а в собственном @media внизу файла,
+       рядом с его базовым блоком: базовые правила кроссворда объявлены ПОСЛЕ этого
+       медиазапроса, специфичность у них та же, и они его молча перебивали. */
+
+    .words-root {
+        /* Зазоры режем, а не плитку: сетка и клавиатура на 360×640 помещаются впритык,
+           и лишние 2 px между рядами стоят дороже, чем кажется. */
+        gap: 8px;
+        --words-gap: 4px;
+        width: 100%;
+    }
+
+    .words-info {
+        align-items: flex-start;
+    }
+
+    .words-keyboard-row {
+        gap: 3px;
+    }
+}
+
+/* Ландшафт телефона: высота ~360px вертикальной раскладкой не берётся никаким clamp —
+   сетка и клавиатура встают в две колонки. Скролл внутри модалки был бы хуже: в игре,
+   где жмут Enter, он источник промахов. */
+@media (orientation: landscape) and (max-height: 500px) {
+    .words-root {
+        --words-tile: clamp(24px, 11vh, 44px);
+
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        grid-template-areas:
+            'header header'
+            'grid   keyboard'
+            'status status';
+        align-items: center;
+        gap: 8px 14px;
+        width: 100%;
+    }
+
+    .words-header { grid-area: header; }
+    .words-grid { grid-area: grid; }
+    .words-keyboard { grid-area: keyboard; }
+    .words-status { grid-area: status; }
+
+    .words-key {
+        min-height: 30px;
+    }
+}
+
+/* --- Окно игры: балда ---
+ *
+ * Бюджет высоты на 360×640: попап 90vh ≈ 576px, минус шапка попапа и topbar ≈ 490px.
+ * Под полем живут строка статуса (~18), три кнопки действий (~34), клавиатура из трёх
+ * рядов (~104) и два столбца собранных слов (~34) — вместе с шапкой и зазорами это
+ * около 250px, поэтому поле ограничено И по ширине, И по высоте (грабли Фазы 5:
+ * ограничение только по ширине выносит клавиатуру за нижний край экрана).
+ */
+
+.balda-root {
+    --balda-size: clamp(160px, min(86vw, 34vh), 320px);
+    --balda-line: var(--djst-line-strong);
+    --balda-accent: var(--djst-accent);
+    /* Занятая клетка залита фоном поля, пустая — только обведена: так видно, куда ещё
+       можно поставить букву. */
+    --balda-fill: var(--djst-surface);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.balda-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.balda-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    min-width: 0;
+}
+
+.balda-turn,
+.balda-level {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+.balda-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.balda-loading,
+.balda-status {
+    min-height: 1.2em;
+    font-size: 0.85em;
+    opacity: 0.9;
+    text-align: center;
+}
+
+/* --- Поле --- */
+
+.balda-board {
+    display: grid;
+    grid-template-columns: repeat(var(--balda-cells, 5), 1fr);
+    grid-auto-rows: 1fr;
+    gap: 3px;
+    /* Квадрат: сторона ограничена и вьюпортом по ширине, и по высоте. */
+    width: var(--balda-size);
+    height: var(--balda-size);
+    /* Без этого браузер считает росчерк по клеткам прокруткой попапа и ход не
+       набирается вовсе (грабли нонограммы, Фаза 11). */
+    touch-action: none;
+    user-select: none;
+}
+
+.balda-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--balda-line);
+    border-radius: 4px;
+    font-size: calc(var(--balda-size) / var(--balda-cells, 5) * 0.46);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.balda-cell.balda-filled {
+    background-color: var(--balda-fill);
+}
+
+/* Пустая клетка, выбранная под новую букву: рамка акцентом, буквы ещё нет. */
+.balda-cell.balda-selected {
+    border-color: var(--balda-accent);
+    box-shadow: inset 0 0 0 1px var(--balda-accent);
+}
+
+/* Поставленная, но не подтверждённая буква — пунктиром: она исчезнет, если ход
+   отменить, и не должна выглядеть как часть поля. */
+.balda-cell.balda-pending {
+    border: 2px dashed var(--balda-accent);
+    color: var(--balda-accent);
+}
+
+.balda-cell.balda-path {
+    background-color: var(--balda-accent);
+    color: var(--djst-accent-fg);
+}
+
+.balda-cell.balda-pending.balda-path {
+    color: var(--djst-accent-fg);
+}
+
+/* Номер шага в углу клетки: без него набранное слово читается только в строке
+   статуса, и промах виден лишь по букве. */
+.balda-cell.balda-path::after {
+    content: attr(data-order);
+    position: absolute;
+    top: 1px;
+    left: 3px;
+    font-size: 0.4em;
+    font-weight: 600;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+.balda-glyph {
+    pointer-events: none;
+}
+
+/* --- Кнопки хода --- */
+
+.balda-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+}
+
+.balda-action {
+    white-space: nowrap;
+}
+
+.balda-action:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* --- Экранная клавиатура ---
+ *
+ * Обязательна, а не опциональна: в окне игры нет ни одного поля ввода, поэтому на
+ * телефоне системная клавиатура не появится вовсе и букву физически нечем поставить.
+ * Все три ряда — ровно 24 юнита: 12 букв по 2, 11 букв по 2 (со сдвигом на юнит) и
+ * 9 букв по 2 (со сдвигом на три).
+ */
+
+.balda-keyboard {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    max-width: 460px;
+}
+
+.balda-keyboard.balda-keyboard-off {
+    opacity: 0.45;
+}
+
+.balda-keyboard-row {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 3px;
+}
+
+/* Сдвиг второго и третьего ряда — одним свойством вместе с шириной: отдельный
+   grid-column-start затирает span из .balda-key (см. ту же грабля у клавиатуры «Слов»),
+   и «Ф» с «Я» выходили вдвое уже соседних клавиш. */
+.balda-keyboard-row:nth-child(2) > .balda-key:first-child {
+    grid-column: 2 / span 2;
+}
+
+.balda-keyboard-row:nth-child(3) > .balda-key:first-child {
+    grid-column: 4 / span 2;
+}
+
+.balda-key {
+    grid-column: span 2;
+    min-height: 32px;
+    padding: 0;
+    /* Кнопка внутри чужого DOM: снимаем всё, что мог навесить ST или браузер. Без
+       этого мобильные WebView рисуют клавишу системным стилем. */
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--djst-surface-strong);
+    color: inherit;
+    font-size: 0.95em;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Только для настоящего указателя: тач-браузеры оставляют :hover на последней тронутой
+   клавише до следующего тапа. */
+@media (hover: hover) {
+    .balda-key:hover {
+        background-color: var(--djst-tint-strong);
+    }
+}
+
+/* --- Собранные слова --- */
+
+.balda-words {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    width: 100%;
+    font-size: 0.8em;
+}
+
+.balda-words-title {
+    display: block;
+    opacity: 0.85;
+}
+
+/* Список растёт всю партию, поэтому высота ограничена и прокручивается внутри себя:
+   иначе к концу партии он выдавил бы клавиатуру за нижний край окна. */
+.balda-words-list {
+    max-height: 3.4em;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    opacity: 0.8;
+}
+
+/* --- Балда: панель настроек --- */
+
+.balda-stats {
+    display: table;
+    width: 100%;
+    margin: 4px 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.balda-stats-row {
+    display: table-row;
+}
+
+.balda-stats-row > span {
+    display: table-cell;
+    padding: 1px 6px 1px 0;
+    font-size: 0.9em;
+}
+
+.balda-stats-head > span {
+    font-weight: 700;
+    opacity: 0.8;
+}
+
+@media (max-width: 480px) {
+    .balda-root {
+        /* Зазоры режем, а не поле: клавиатура и списки слов на 360×640 помещаются
+           впритык, и лишние пиксели между блоками стоят дороже, чем кажется. */
+        gap: 6px;
+    }
+
+    .balda-info {
+        align-items: flex-start;
+    }
+}
+
+/* Ландшафт телефона: высота ~360px вертикальной раскладкой не берётся никаким clamp —
+   поле и клавиатура встают в две колонки (то же решение, что в «Словах»). */
+@media (orientation: landscape) and (max-height: 500px) {
+    .balda-root {
+        --balda-size: clamp(140px, 62vh, 260px);
+
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        grid-template-areas:
+            'header header'
+            'board  keyboard'
+            'board  actions'
+            'status words';
+        align-items: center;
+        gap: 6px 12px;
+    }
+
+    .balda-header { grid-area: header; }
+    .balda-board { grid-area: board; }
+    .balda-status { grid-area: status; }
+    .balda-actions { grid-area: actions; }
+    .balda-keyboard { grid-area: keyboard; }
+    .balda-words { grid-area: words; }
+
+    .balda-key {
+        min-height: 26px;
+    }
+}
+
+/* --- Окно игры: кроссворд-скелет --- */
+
+.crossword-root {
+    /* Сетка ограничена И по ширине, И по высоте — грабли Фазы 5. Бюджет высоты на
+       360×640: попап 90vh ≈ 576px, минус шапка попапа и topbar ≈ 490px; шапка игры ~36
+       + сетка ~256 + банк слов ~140 + строка статуса ~24 + зазоры ≈ 480. Банк на сложном
+       уровне — до 28 слов, поэтому потолок по высоте ниже, чем у соседних игр: место
+       нужно не только полю. */
+    --crossword-size: clamp(200px, min(88vw, 40vh), 420px);
+
+    --crossword-accent: var(--djst-accent);
+    --crossword-line: var(--djst-line);
+    --crossword-block: var(--djst-line-strong);
+    /* Открытая клетка — фон поля, а не «дымка» поверх окна: только так сетка видна на
+       любой теме таверны. */
+    --crossword-open: var(--djst-surface);
+    /* Фолбэк для браузеров без color-mix идёт первым — их движок просто не поймёт
+       вторую строку и оставит первую. */
+    --crossword-active: var(--djst-tint-strong);
+    --crossword-active: color-mix(in srgb, var(--djst-accent) 22%, var(--djst-surface));
+    --crossword-chip: var(--djst-surface-strong);
+    --crossword-wrong: var(--djst-danger);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--djst-fg);
+}
+
+.crossword-header {
+    /* flex-wrap здесь не ставим: см. комментарий у .minesweeper-header. */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    /* Не var(--crossword-size): см. комментарий у .minesweeper-header — то же решение. */
+    width: fit-content;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+}
+
+.crossword-select {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+}
+
+.crossword-info {
+    /* Счётчик слов и таймер в одну строку не всегда помещаются — переносим внутри блока,
+       как у реверси/слов/балды, а не даём тексту вылезать поверх кнопки. */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-width: 0;
+}
+
+.crossword-left,
+.crossword-timer {
+    font-size: 0.95em;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
+.crossword-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.crossword-loading {
+    min-height: 1.2em;
+    font-size: 0.85em;
+    opacity: 0.85;
+    text-align: center;
+}
+
+.crossword-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: var(--crossword-size);
+    max-width: 100%;
+}
+
+.crossword-clear,
+.crossword-next {
+    flex: 0 0 auto;
+}
+
+.crossword-clear:disabled,
+.crossword-next:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.crossword-status {
+    font-size: 0.85em;
+    opacity: 0.85;
+    min-height: 1.2em;
+}
+
+/* --- Сетка и банк --- */
+
+.crossword-board-box {
+    width: var(--crossword-size);
+    max-width: 100%;
+}
+
+.crossword-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    /* Ни зума по двойному тапу, ни выделения текста: сетка и банк набираются тапами. */
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.crossword-board {
+    display: grid;
+    /* minmax(0, 1fr), а не 1fr: у клетки min-content — это буква, и одна широкая «Ш»
+       раздвинула бы свой столбец за счёт соседних. Сетка обязана оставаться ровной. */
+    grid-template-columns: repeat(var(--crossword-cols), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--crossword-rows), minmax(0, 1fr));
+    /* Высота считается от фактической ширины сетки, а не от --crossword-size: поля
+       попапа ST в vw не входят (грабли Фазы 5). */
+    aspect-ratio: var(--crossword-cols) / var(--crossword-rows);
+    width: 100%;
+    border: 1px solid var(--crossword-block);
+    background-color: var(--crossword-open);
+    /* Контейнер для cqw в КЛЕТКЕ: сама сетка запросить себя не может — cqw внутри
+       .crossword-board уехал бы к внешнему контейнеру, а без него к вьюпорту, и в широком
+       окне ST буква выходила вчетверо больше клетки (в живой таверне 106px вместо 30).
+       Ровно как у сапёра и нонограммы: container-type здесь, font-size — на детях. */
+    container-type: inline-size;
+    line-height: 1;
+    text-transform: uppercase;
+    overflow: hidden;
+}
+
+.crossword-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Клетка — 1/cols ширины сетки, буква занимает от неё чуть больше половины: так
+       она помещается и в 7 столбцов, и в 11. */
+    font-size: calc(58cqw / var(--crossword-cols));
+    min-width: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--crossword-line);
+    border-left: 1px solid var(--crossword-line);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.crossword-cell.crossword-block {
+    background-color: var(--crossword-block);
+    border-color: var(--crossword-block);
+    cursor: default;
+}
+
+.crossword-cell.crossword-active {
+    background-color: var(--crossword-active);
+}
+
+.crossword-cell.crossword-filled {
+    font-weight: 600;
+}
+
+/* Буква, пришедшая с пересечения в место, куда слово ещё не положено. Разница видна
+   и без color-mix: у «своей» буквы вес 600, у чужой — обычный. Цвет — второй слой
+   сигнала для движков, которые color-mix понимают. */
+.crossword-cell.crossword-pending {
+    font-weight: 400;
+    /* Гасим букву, а не клетку: opacity на клетке притушила бы и подсветку выбранного
+       слова — а выбранное место чаще всего как раз такое, недобранное. Серый с альфой —
+       фолбэк для движков без color-mix, он читается и на светлой, и на тёмной теме. */
+    color: rgba(128, 128, 128, 0.85);
+    color: color-mix(in srgb, var(--djst-fg) 45%, transparent);
+}
+
+/* Ошибка — только по настройке: по умолчанию кроссворд ничего не подсказывает. */
+.crossword-cell.crossword-wrong {
+    color: var(--crossword-wrong);
+}
+
+.crossword-cell.crossword-cursor {
+    outline: 2px dashed var(--crossword-accent);
+    outline-offset: -2px;
+}
+
+.crossword-cell:focus-visible {
+    outline: 2px solid var(--crossword-accent);
+    outline-offset: -2px;
+}
+
+/* Банк слов. Разложенные слова не исчезают, а гаснут: строка, теряющая слова, дёргалась
+   бы по ширине на каждом ходу (грабли ряда цифр в судоку). Слова разложены по длинам —
+   строка на длину, число слева; подобрать слово под место в семь клеток иначе можно
+   было только пересчитывая буквы в каждом слове подряд. */
+.crossword-bank {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+}
+
+.crossword-bank-group {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    width: 100%;
+}
+
+/* Ширина колонки с числом фиксирована: длины 3…9 однозначные, и слова всех строк
+   обязаны начинаться на одной вертикали, иначе группировка не читается. */
+.crossword-bank-len {
+    flex: 0 0 auto;
+    width: 1.2em;
+    text-align: right;
+    font-size: 0.72em;
+    opacity: 0.55;
+    font-variant-numeric: tabular-nums;
+}
+
+.crossword-bank-words {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* Выбрано место — своя строка подсвечена, остальные притухли. Не прячем: банк, меняющий
+   высоту на каждый выбор слота, дёргал бы всё окно. */
+.crossword-bank-group-off {
+    opacity: 0.5;
+}
+
+.crossword-bank-group-fit .crossword-bank-len {
+    opacity: 1;
+    color: var(--crossword-accent);
+}
+
+.crossword-word {
+    flex: 0 0 auto;
+    /* 3px по вертикали, а не 2: с ними чип дотягивает до 24px — нижней границы
+       тыкаемой цели, которую меряет mobile.e2e. */
+    padding: 3px 7px;
+    border: 1px solid var(--crossword-line);
+    border-radius: 4px;
+    background-color: var(--crossword-chip);
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.78em;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.crossword-word.crossword-word-fit {
+    border-color: var(--crossword-accent);
+}
+
+.crossword-word.crossword-word-used {
+    opacity: 0.35;
+    text-decoration: line-through;
+}
+
+.crossword-word.crossword-word-wrong {
+    color: var(--crossword-wrong);
+    border-color: var(--crossword-wrong);
+}
+
+.crossword-word:focus-visible {
+    outline: 2px solid var(--crossword-accent);
+    outline-offset: 1px;
+}
+
+/* Узкий экран. Медиазапрос стоит здесь, а не в общем блоке @media выше по файлу:
+   базовые правила кроссворда объявлены ниже него, специфичность у них та же, и общий
+   блок оказывался мёртвым — селектор уровня оставался при своих max-width: 45%, и
+   «Лёгкий (7×7)» обрезался посреди слова. */
+@media (max-width: 500px) {
+    /* Как и у сапёра с нонограммой: селектор уровня уходит на свою строку, счётчик
+       слов и таймер остаются одной. */
+    .crossword-header {
+        flex-wrap: wrap;
+    }
+
+    .crossword-select {
+        max-width: 100%;
+        flex: 1 1 100%;
+        order: -1;
+    }
+
+    /* Сетку на узком экране НЕ уменьшаем, хотя соблазн есть: ширина окна равна ширине
+       сетки, и сетка поуже делает банк поуже — слова в нём переносятся на лишние
+       строки, и окно выходит выше, а не ниже. Высоту ограничиваем там, где она
+       действительно плавает, — в самом банке. */
+    .crossword-bank {
+        /* Высота банка зависит от головоломки: у одной четыре строки длин, у другой
+           шесть, и эта разница на 360×640 ровно та, что выдавливает низ окна за край
+           попапа. Банк прокручивается внутри себя — как списки слов балды, — и высота
+           окна перестаёт зависеть от того, какая головоломка выпала. */
+        max-height: 18vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .crossword-tools {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+
+    .crossword-status {
+        flex: 1 1 100%;
+    }
+}
+
+/* --- Кроссворд: панель настроек --- */
+
+.crossword-stats {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 2px 12px;
+    margin: 4px 0 8px;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.crossword-stats-row {
+    display: contents;
+}
+
+.crossword-stats-row > span:not(:first-child) {
+    text-align: right;
+}
+
+.crossword-stats-row.crossword-stats-head > span {
+    opacity: 0.6;
+    font-size: 0.85em;
+}
