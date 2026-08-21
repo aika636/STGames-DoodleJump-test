@@ -239,8 +239,9 @@
  *   --djst-snake-*        цвета канваса змейки — только литералы и var(), без color-mix:
  *                        их читает JS через getComputedStyle, а color-mix в значении
  *                        пользовательского свойства до JS доезжает неразобранным.
- *   --djst-doodlejump-*   цвета канваса «Дудл Джампа» (фигурка, её глаза, типы платформ) —
- *                        то же ограничение, что у --djst-snake-*: только литералы и var().
+ *   --djst-doodlejump-*   цвета канваса «Дудл Джампа» (фигурка, её глаза, типы платформ,
+ *                        бустеры, монеты) — то же ограничение, что у --djst-snake-*: только
+ *                        литералы и var().
  *
  * Значения по умолчанию — режим theme: ровно то, что было до появления палитры.
  */
@@ -282,6 +283,7 @@
     --djst-doodlejump-spring: #e0c34d;
     --djst-doodlejump-propeller: #7bc6c6;
     --djst-doodlejump-rocket: #d1603d;
+    --djst-doodlejump-coin: #e0b84d;
 }
 
 /* Тёмная палитра. Не «тема ST потемнее», а свой набор: фон окна чуть светлее чёрного,
@@ -315,6 +317,7 @@
     --djst-doodlejump-spring: #e0c34d;
     --djst-doodlejump-propeller: #7bc6c6;
     --djst-doodlejump-rocket: #d1603d;
+    --djst-doodlejump-coin: #e0b84d;
 }
 
 /* Светлая палитра. Поле белое, а подложка окна — тёплый серый: белое поле на белом окне
@@ -347,6 +350,7 @@
     --djst-doodlejump-spring: #b08f14;
     --djst-doodlejump-propeller: #2f7d7d;
     --djst-doodlejump-rocket: #a83c1c;
+    --djst-doodlejump-coin: #a8801a;
 }
 
 /* Своя палитра — своя подложка: без неё шапка окна и подписи остались бы цветом темы ST
